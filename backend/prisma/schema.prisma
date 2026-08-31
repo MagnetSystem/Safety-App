@@ -1,0 +1,341 @@
+// Campus Safety: Anti-Ragging Reporting System
+// Prisma schema — MVP (9 core tables, multi-tenant via collegeId)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  STUDENT
+  COLLEGE_ADMIN
+  SUPER_ADMIN
+}
+
+enum CollegeStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum ReportType {
+  EMERGENCY
+  NORMAL
+  ANONYMOUS
+}
+
+enum IncidentCategory {
+  PHYSICAL_RAGGING
+  VERBAL_ABUSE
+  MENTAL_HARASSMENT
+  THREAT
+  HOSTEL_RAGGING
+  CLASSROOM_RAGGING
+  CYBER_BULLYING
+  MONEY_EXTORTION
+  SEXUAL_HARASSMENT
+  OTHER
+}
+
+enum ComplaintStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  INVESTIGATING
+  MORE_INFO_REQUESTED
+  RESOLVED
+  CLOSED
+}
+
+enum ComplaintPriority {
+  CRITICAL
+  HIGH
+  NORMAL
+  LOW
+}
+
+enum EvidenceType {
+  IMAGE
+  VIDEO
+  AUDIO
+  DOCUMENT
+}
+
+enum NotificationType {
+  REPORT_SUBMITTED
+  INVESTIGATION_STARTED
+  MORE_INFO_REQUESTED
+  REPORT_CLOSED
+  NEW_EMERGENCY_REPORT
+  NEW_COMPLAINT
+  NEW_EVIDENCE_UPLOADED
+  STATUS_CHANGED
+  GENERIC
+}
+
+// ---------------------------------------------------------------------------
+// Core identity
+// ---------------------------------------------------------------------------
+
+/// Shared login/identity record across all roles.
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  role         UserRole
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  student      Student?
+  collegeAdmin CollegeAdmin?
+
+  notifications      Notification[]
+  auditLogs          AuditLog[]
+  complaintTimelines ComplaintTimeline[]
+  uploadedEvidence   ComplaintEvidence[]
+
+  @@index([role])
+  @@map("users")
+}
+
+/// One record per college. Scopes all student/complaint data.
+model College {
+  id        String        @id @default(uuid())
+  name      String
+  code      String        @unique
+  address   String?
+  state     String?
+  district  String?
+  principal String?
+  phone     String?
+  email     String?
+  status    CollegeStatus @default(ACTIVE)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  students   Student[]
+  admins     CollegeAdmin[]
+  complaints Complaint[]
+  auditLogs  AuditLog[]
+
+  @@index([status])
+  @@map("colleges")
+}
+
+/// Full student profile: personal, academic, contact, emergency info.
+model Student {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  collegeId String
+  college   College @relation(fields: [collegeId], references: [id])
+
+  // Personal
+  name          String
+  photoUrl      String?
+  studentNumber String? // roll / register number
+  dateOfBirth   DateTime?
+  gender        String?
+
+  // Academic
+  department String?
+  course     String?
+  semester   String?
+  year       Int?
+  section    String?
+  isHosteler Boolean? @default(false)
+
+  // Contact & family
+  mobile                 String?
+  guardianName            String?
+  guardianPhone           String?
+  emergencyContactName    String?
+  emergencyContactPhone   String?
+
+  // Address
+  permanentAddress String?
+  hostelAddress    String?
+  hostelRoomNumber String?
+
+  // Emergency medical info
+  bloodGroup        String?
+  medicalConditions String?
+  allergies         String?
+  disability        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  complaints Complaint[]
+
+  @@index([collegeId])
+  @@index([studentNumber])
+  @@map("students")
+}
+
+/// Admin accounts, each linked to exactly one college.
+model CollegeAdmin {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  collegeId String
+  college   College @relation(fields: [collegeId], references: [id])
+
+  name  String
+  phone String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([collegeId])
+  @@map("college_admins")
+}
+
+// ---------------------------------------------------------------------------
+// Complaints
+// ---------------------------------------------------------------------------
+
+/// The core report record.
+model Complaint {
+  id   String @id @default(uuid())
+  code String @unique // human-friendly reference e.g. CS-2026-000123
+
+  collegeId String
+  college   College @relation(fields: [collegeId], references: [id])
+
+  // Null-able: anonymous reports still keep an internal link for anti-spam /
+  // safe follow-up, but this is never exposed to College Admins in API responses.
+  studentId String?
+  student   Student? @relation(fields: [studentId], references: [id])
+
+  type     ReportType
+  category IncidentCategory
+  status   ComplaintStatus   @default(SUBMITTED)
+  priority ComplaintPriority @default(NORMAL)
+
+  description       String
+  incidentDate      DateTime?
+  location          String?
+  suspectedStudents String?
+  witnesses         String?
+
+  // Emergency-only GPS capture
+  gpsLat      Float?
+  gpsLng      Float?
+  gpsAccuracy Float?
+  deviceInfo  String?
+
+  isAnonymous Boolean @default(false)
+
+  assignedCommitteeUserIds String[] @default([])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  evidence ComplaintEvidence[]
+  timeline ComplaintTimeline[]
+
+  @@index([collegeId, status])
+  @@index([collegeId, createdAt])
+  @@index([studentId])
+  @@map("complaints")
+}
+
+/// Uploaded files linked to a specific complaint.
+model ComplaintEvidence {
+  id String @id @default(uuid())
+
+  complaintId String
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  type        EvidenceType
+  storagePath String // path inside the private Supabase bucket
+  fileName    String
+  mimeType    String?
+  sizeBytes   Int?
+
+  uploadedById String?
+  uploadedBy   User?   @relation(fields: [uploadedById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([complaintId])
+  @@map("complaint_evidence")
+}
+
+/// Step-by-step history of a complaint's workflow.
+model ComplaintTimeline {
+  id String @id @default(uuid())
+
+  complaintId String
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  status ComplaintStatus
+  note   String?
+
+  actorId String?
+  actor   User?   @relation(fields: [actorId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([complaintId])
+  @@map("complaint_timeline")
+}
+
+// ---------------------------------------------------------------------------
+// Notifications & Audit
+// ---------------------------------------------------------------------------
+
+/// Queued and sent notifications per user.
+model Notification {
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type  NotificationType
+  title String
+  body  String
+  data  Json?
+
+  isRead Boolean   @default(false)
+  sentAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+/// Immutable record of sensitive actions across the platform.
+model AuditLog {
+  id String @id @default(uuid())
+
+  actorId String?
+  actor   User?   @relation(fields: [actorId], references: [id])
+
+  collegeId String?
+  college   College? @relation(fields: [collegeId], references: [id])
+
+  action     String // e.g. "COMPLAINT_STATUS_CHANGED", "EVIDENCE_DOWNLOADED"
+  entityType String // e.g. "Complaint", "Student"
+  entityId   String?
+  metadata   Json?
+  ipAddress  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([collegeId, createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
