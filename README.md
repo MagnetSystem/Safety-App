@@ -90,4 +90,4 @@ Once your work is done, create a Pull Request (PR) to merge `feature/your-featur
 - Keep credentials out of the source code.
 
 ---
-*Maintained by MagnetSystem.*
+*Maintained by MagnetSystems.*
