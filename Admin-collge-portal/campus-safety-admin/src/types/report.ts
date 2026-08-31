@@ -62,6 +62,7 @@ export interface Report {
   collegeId: string;
   college?: { id: string; name: string; code: string };
   student?: { id: string; name: string; studentNumber: string | null; mobile?: string | null } | null;
+  resolutionReport: string | null;
   evidence?: Evidence[];
   timeline?: TimelineEntry[];
   createdAt: string;

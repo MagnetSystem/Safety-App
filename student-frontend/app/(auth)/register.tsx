@@ -1,12 +1,12 @@
-﻿import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import React, { useEffect, useState, useMemo } from 'react';
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Modal, TextInput, FlatList } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Glass, GlassInput, ScreenHeader } from '../../src/components/ui-kit';
 import { Screen } from '../../src/components/PhoneFrame';
 import { colors, radius, spacing, typography, shadows } from '../../src/constants/theme';
 import { useAuth } from '../../src/store/AuthContext';
 import { getPublicColleges, PublicCollege } from '../../src/services/collegesService';
-import { ChevronRight, ChevronLeft, Check } from 'lucide-react-native';
+import { ChevronRight, ChevronLeft, Check, Search, X, Building2 } from 'lucide-react-native';
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -15,13 +15,16 @@ export default function RegisterScreen() {
   const [step, setStep] = useState(1);
   const [colleges, setColleges] = useState<PublicCollege[]>([]);
   const [collegesLoading, setCollegesLoading] = useState(true);
-  const [collegeId, setCollegeId] = useState<string | null>(null);
-
+  
+  // Form State
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [studentNumber, setStudentNumber] = useState('');
-  const [mobile, setMobile] = useState('');
+  const [collegeId, setCollegeId] = useState<string | null>(null);
+
+  // College Picker Modal State
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -30,11 +33,21 @@ export default function RegisterScreen() {
     getPublicColleges()
       .then((list) => {
         setColleges(list);
-        if (list.length > 0) setCollegeId(list[0].id);
       })
       .catch(() => setError('Could not load the list of colleges. Pull down to try again.'))
       .finally(() => setCollegesLoading(false));
   }, []);
+
+  const filteredColleges = useMemo(() => {
+    if (!searchQuery) return colleges;
+    const lowerQuery = searchQuery.toLowerCase();
+    return colleges.filter(c => 
+      c.name.toLowerCase().includes(lowerQuery) || 
+      c.code.toLowerCase().includes(lowerQuery)
+    );
+  }, [searchQuery, colleges]);
+
+  const selectedCollege = colleges.find(c => c.id === collegeId);
 
   const step1Valid = name.trim().length > 1 && email.trim().length > 0 && password.length >= 8;
   const step2Valid = !!collegeId;
@@ -50,10 +63,8 @@ export default function RegisterScreen() {
         email: email.trim(),
         password,
         collegeId,
-        studentNumber: studentNumber.trim() || undefined,
-        mobile: mobile.trim() || undefined,
       });
-      router.replace('/(tabs)/home');
+      router.replace('/(auth)/complete-profile' as any);
     } catch (err: any) {
       setError(err.message ?? 'Could not create your account.');
     } finally {
@@ -66,7 +77,7 @@ export default function RegisterScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <ScreenHeader
           title="Create account"
-          subtitle={step === 1 ? "Step 1: Your details" : "Step 2: College info"}
+          subtitle={step === 1 ? "Step 1: Your details" : "Step 2: Choose your College"}
           back={step === 1 ? "/(auth)/login" : undefined}
           onBack={step === 2 ? () => setStep(1) : undefined}
         />
@@ -108,46 +119,30 @@ export default function RegisterScreen() {
 
           {step === 2 && (
             <>
-              <GlassInput
-                label="Roll / registration number (optional)"
-                placeholder="SIT/CSE/2029/0147"
-                value={studentNumber}
-                onChangeText={setStudentNumber}
-              />
-              <GlassInput
-                label="Mobile (optional)"
-                placeholder="+91 90000 00000"
-                value={mobile}
-                onChangeText={setMobile}
-                keyboardType="phone-pad"
-              />
-
               <View>
-                <Text style={styles.label}>Select your College</Text>
-                {collegesLoading ? (
-                  <ActivityIndicator color={colors.indigoink} style={styles.collegeLoading} />
-                ) : (
-                  <View style={styles.chipsContainer}>
-                    {colleges.map((c) => {
-                      const active = c.id === collegeId;
-                      return (
-                        <Pressable
-                          key={c.id}
-                          onPress={() => setCollegeId(c.id)}
-                          style={[styles.chip, active ? styles.chipActive : styles.chipInactive]}
-                        >
-                          <Text style={[styles.chipText, active && styles.chipTextActive]} numberOfLines={1}>
-                            {c.name}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                    {colleges.length === 0 && (
-                      <Text style={styles.emptyColleges}>No colleges are registered yet.</Text>
-                    )}
+                <Text style={styles.label}>Which college do you attend?</Text>
+                
+                <Pressable 
+                  style={styles.dropdownTrigger}
+                  onPress={() => setIsPickerOpen(true)}
+                >
+                  <View style={styles.dropdownContent}>
+                    <Building2 size={20} color={selectedCollege ? colors.indigoink : colors.mutedink} />
+                    <Text style={[styles.dropdownText, !selectedCollege && styles.dropdownPlaceholder]}>
+                      {selectedCollege ? selectedCollege.name : 'Tap to search colleges...'}
+                    </Text>
                   </View>
+                  <ChevronRight size={20} color={colors.subink} />
+                </Pressable>
+
+                {collegesLoading && (
+                  <ActivityIndicator color={colors.indigoink} style={styles.collegeLoading} />
                 )}
               </View>
+
+              <Text style={styles.noticeText}>
+                You will be able to complete the rest of your profile (like Phone Number and Registration ID) after you log in.
+              </Text>
 
               {error && <Text style={styles.error}>{error}</Text>}
 
@@ -170,7 +165,7 @@ export default function RegisterScreen() {
                     <ActivityIndicator color="#FFFFFF" />
                   ) : (
                     <>
-                      <Text style={styles.buttonText}>Create</Text>
+                      <Text style={styles.buttonText}>Create Account</Text>
                       <Check size={20} color="#FFF" />
                     </>
                   )}
@@ -180,6 +175,63 @@ export default function RegisterScreen() {
           )}
         </View>
       </ScrollView>
+
+      {/* Full Screen College Search Modal */}
+      <Modal visible={isPickerOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setIsPickerOpen(false)}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select College</Text>
+            <Pressable onPress={() => setIsPickerOpen(false)} style={styles.closeButton}>
+              <X size={24} color={colors.ink} />
+            </Pressable>
+          </View>
+          
+          <View style={styles.searchContainer}>
+            <Search size={20} color={colors.subink} />
+            <TextInput 
+              style={styles.searchInput}
+              placeholder="Search by name or code..."
+              placeholderTextColor={colors.mutedink}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoFocus
+            />
+            {searchQuery.length > 0 && (
+              <Pressable onPress={() => setSearchQuery('')}>
+                <X size={18} color={colors.mutedink} />
+              </Pressable>
+            )}
+          </View>
+
+          <FlatList 
+            data={filteredColleges}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.listContainer}
+            keyboardShouldPersistTaps="handled"
+            renderItem={({ item }) => (
+              <Pressable 
+                style={[styles.collegeItem, collegeId === item.id && styles.collegeItemActive]}
+                onPress={() => {
+                  setCollegeId(item.id);
+                  setIsPickerOpen(false);
+                  setSearchQuery('');
+                }}
+              >
+                <View style={styles.collegeInfo}>
+                  <Text style={[styles.collegeName, collegeId === item.id && styles.collegeNameActive]}>{item.name}</Text>
+                  <Text style={styles.collegeCode}>{item.code}</Text>
+                </View>
+                {collegeId === item.id && <Check size={20} color={colors.indigoink} />}
+              </Pressable>
+            )}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>No colleges found matching "{searchQuery}"</Text>
+              </View>
+            }
+          />
+        </View>
+      </Modal>
     </Screen>
   );
 }
@@ -213,36 +265,39 @@ const styles = StyleSheet.create({
     color: colors.subink,
     marginBottom: spacing.md,
   },
+  noticeText: {
+    ...typography.caption,
+    color: colors.mutedink,
+    textAlign: 'center',
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.lg,
+  },
   collegeLoading: {
     marginTop: spacing.sm,
   },
-  chipsContainer: {
+  dropdownTrigger: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: radius.pill,
-    maxWidth: '100%',
-  },
-  chipActive: {
-    backgroundColor: colors.lavenderTint,
-  },
-  chipInactive: {
+    alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    padding: 16,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.8)',
+    ...shadows.soft,
   },
-  chipText: {
-    ...typography.caption,
-    color: colors.subink,
+  dropdownContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
   },
-  chipTextActive: {
-    color: colors.lavender,
-    fontFamily: 'Inter_500Medium',
+  dropdownText: {
+    ...typography.body,
+    color: colors.ink,
+    flex: 1,
   },
-  emptyColleges: {
-    ...typography.caption,
+  dropdownPlaceholder: {
     color: colors.mutedink,
   },
   error: {
@@ -284,5 +339,89 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     fontSize: 15,
     color: '#FFFFFF',
+  },
+  
+  // Modal Styles
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#F8F9FA',
+    paddingTop: 40,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
+  },
+  modalTitle: {
+    ...typography.h3,
+    fontSize: 20,
+  },
+  closeButton: {
+    padding: 8,
+    marginRight: -8,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    margin: spacing.lg,
+    paddingHorizontal: 16,
+    borderRadius: radius.pill,
+    height: 50,
+    ...shadows.soft,
+    gap: 12,
+  },
+  searchInput: {
+    flex: 1,
+    ...typography.body,
+    height: '100%',
+  },
+  listContainer: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: 40,
+  },
+  collegeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    borderRadius: radius.lg,
+    marginBottom: spacing.sm,
+    ...shadows.soft,
+  },
+  collegeItemActive: {
+    backgroundColor: colors.lavenderTint,
+    borderColor: colors.lavender,
+    borderWidth: 1,
+  },
+  collegeInfo: {
+    flex: 1,
+  },
+  collegeName: {
+    ...typography.body,
+    fontFamily: 'Inter_500Medium',
+    color: colors.ink,
+    marginBottom: 4,
+  },
+  collegeNameActive: {
+    color: colors.indigoink,
+  },
+  collegeCode: {
+    ...typography.caption,
+    color: colors.subink,
+  },
+  emptyContainer: {
+    padding: spacing.xl,
+    alignItems: 'center',
+  },
+  emptyText: {
+    ...typography.body,
+    color: colors.subink,
+    textAlign: 'center',
   },
 });

@@ -15,6 +15,7 @@ const client_1 = require("@prisma/client");
 class UpdateComplaintStatusDto {
     status;
     note;
+    resolutionReport;
 }
 exports.UpdateComplaintStatusDto = UpdateComplaintStatusDto;
 __decorate([
@@ -26,4 +27,9 @@ __decorate([
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], UpdateComplaintStatusDto.prototype, "note", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], UpdateComplaintStatusDto.prototype, "resolutionReport", void 0);
 //# sourceMappingURL=update-complaint-status.dto.js.map

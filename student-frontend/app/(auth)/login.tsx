@@ -23,7 +23,18 @@ export default function LoginScreen() {
     setSubmitting(true);
     try {
       await login(email.trim(), password);
-      router.replace('/(tabs)/home');
+      try {
+        const { getMyProfile } = require('../../src/services/studentsService');
+        const profile = await getMyProfile();
+        const isProfileIncomplete = !profile.mobile || !profile.studentNumber || !profile.department || !profile.emergencyContactName || !profile.emergencyContactPhone;
+        if (isProfileIncomplete) {
+          router.replace('/(auth)/complete-profile' as any);
+        } else {
+          router.replace('/(tabs)/home');
+        }
+      } catch {
+        router.replace('/(tabs)/home');
+      }
     } catch (err: any) {
       setError(err.message ?? 'Could not sign in.');
     } finally {
@@ -81,7 +92,7 @@ export default function LoginScreen() {
         </Pressable>
 
         <Text style={styles.footnote}>
-          Your details stay private. Anonymous reports never show your name to anyone on the committee.
+          Your details stay private. Incident reports never show your name to anyone on the committee.
         </Text>
       </ScrollView>
     </Screen>

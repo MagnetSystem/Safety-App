@@ -18,8 +18,8 @@ export const getReportById = async (id: string) => {
   return data;
 };
 
-export const updateReportStatus = async (id: string, status: ComplaintStatus, note?: string) => {
-  const { data } = await api.patch<Report>(`/complaints/${id}/status`, { status, note });
+export const updateReportStatus = async (id: string, status: ComplaintStatus, note?: string, resolutionReport?: string) => {
+  const { data } = await api.patch<Report>(`/complaints/${id}/status`, { status, note, resolutionReport });
   return data;
 };
 

@@ -8,4 +8,8 @@ export class UpdateComplaintStatusDto {
   @IsOptional()
   @IsString()
   note?: string;
+
+  @IsOptional()
+  @IsString()
+  resolutionReport?: string;
 }

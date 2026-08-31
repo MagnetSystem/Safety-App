@@ -152,7 +152,7 @@ export default function HomeScreen() {
               <View style={[styles.iconWrapper, { backgroundColor: colors.lavenderTint }]}>
                 <UserX size={20} strokeWidth={1.8} color={colors.lavender} />
               </View>
-              <Text style={styles.actionTitle}>Anonymous report</Text>
+              <Text style={styles.actionTitle}>Incident report</Text>
               <Text style={styles.actionSubtitle}>Nobody sees who you are</Text>
             </Glass>
           </Pressable>

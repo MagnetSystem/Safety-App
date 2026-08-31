@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
   ArrowLeft, Download, MessageSquare,
-  MapPin, Clock, Loader2, FileImage,
+  MapPin, Clock, Loader2, FileImage, FileText
 } from "lucide-react";
 import { getReportById, updateReportStatus, getEvidence } from "../../services/complaintsService";
 import { formatEnum, type ComplaintStatus, type Evidence, type Report } from "../../types/report";
 import { useAuth } from "../../context/AuthContext";
+import jsPDF from "jspdf";
 
 const STATUS_OPTIONS: ComplaintStatus[] = [
   "SUBMITTED",
@@ -25,8 +26,14 @@ export default function ReportDetail() {
   const [evidence, setEvidence] = useState<Evidence[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  
+  // Status Change State
   const [statusValue, setStatusValue] = useState<ComplaintStatus>("SUBMITTED");
+  const [pendingStatus, setPendingStatus] = useState<ComplaintStatus | null>(null);
+  const [resolutionReport, setResolutionReport] = useState("");
   const [updating, setUpdating] = useState(false);
+  
+  // Note State
   const [note, setNote] = useState("");
   const [savingNote, setSavingNote] = useState(false);
 
@@ -45,17 +52,43 @@ export default function ReportDetail() {
 
   useEffect(load, [id]);
 
-  const handleStatusChange = async (next: ComplaintStatus) => {
-    if (!id) return;
+  const handleStatusSelect = (next: ComplaintStatus) => {
+    if (next === report?.status) {
+      setPendingStatus(null);
+      setStatusValue(next);
+      return;
+    }
+
     setStatusValue(next);
+    
+    if (next === "RESOLVED" || next === "CLOSED") {
+      setPendingStatus(next);
+      setResolutionReport("");
+    } else {
+      // Auto-submit for other statuses
+      submitStatusChange(next);
+    }
+  };
+
+  const submitStatusChange = async (next: ComplaintStatus, reportText?: string) => {
+    if (!id) return;
     setUpdating(true);
     try {
-      const updated = await updateReportStatus(id, next);
+      const updated = await updateReportStatus(id, next, undefined, reportText);
       setReport(updated);
+      setStatusValue(updated.status);
+      setPendingStatus(null);
+      setResolutionReport("");
     } catch {
       setError("Could not update status.");
     } finally {
       setUpdating(false);
+    }
+  };
+
+  const handleConfirmResolution = () => {
+    if (pendingStatus && resolutionReport.trim().length > 10) {
+      submitStatusChange(pendingStatus, resolutionReport.trim());
     }
   };
 
@@ -71,6 +104,45 @@ export default function ReportDetail() {
     } finally {
       setSavingNote(false);
     }
+  };
+
+  const downloadPDF = () => {
+    if (!report) return;
+    const doc = new jsPDF();
+    
+    doc.setFontSize(22);
+    doc.text(`Incident Report: ${report.code}`, 20, 20);
+    
+    doc.setFontSize(12);
+    doc.text(`Status: ${formatEnum(report.status)}`, 20, 30);
+    doc.text(`Date Filed: ${new Date(report.createdAt).toLocaleDateString()}`, 20, 38);
+    doc.text(`Category: ${formatEnum(report.category)}`, 20, 46);
+    
+    if (report.student) {
+      doc.text(`Reported by: ${report.student.name} (${report.student.studentNumber || 'No Roll No'})`, 20, 54);
+      doc.text(`Contact: ${report.student.mobile || 'N/A'}`, 20, 62);
+    } else {
+      doc.text(`Reported by: Anonymous`, 20, 54);
+    }
+
+    doc.setFontSize(16);
+    doc.text("Description", 20, 80);
+    doc.setFontSize(12);
+    const splitDesc = doc.splitTextToSize(report.description, 170);
+    doc.text(splitDesc, 20, 90);
+    
+    let yPos = 90 + (splitDesc.length * 6) + 10;
+    
+    if (report.resolutionReport) {
+      doc.setFontSize(16);
+      doc.text("Official Resolution Report", 20, yPos);
+      doc.setFontSize(12);
+      const splitRes = doc.splitTextToSize(report.resolutionReport, 170);
+      yPos += 10;
+      doc.text(splitRes, 20, yPos);
+    }
+
+    doc.save(`Resolution_${report.code}.pdf`);
   };
 
   if (loading) {
@@ -92,7 +164,8 @@ export default function ReportDetail() {
   }
 
   return (
-    <div className="p-4 sm:p-6 max-w-[1100px] mx-auto space-y-6">
+    <>
+      <div className="p-4 sm:p-6 max-w-[1100px] mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
         <Link to="/reports" className="p-2 rounded-lg hover:bg-muted transition">
@@ -154,6 +227,28 @@ export default function ReportDetail() {
               </div>
             </div>
           </div>
+          
+          {/* Resolution Report */}
+          {report.resolutionReport && (
+             <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl p-5 space-y-4">
+               <div className="flex items-center justify-between">
+                 <h3 className="font-medium text-lg flex items-center gap-2">
+                   <FileText size={18} className="text-primary" /> Official Resolution Report
+                 </h3>
+                 <button
+                   onClick={downloadPDF}
+                   className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border text-sm hover:bg-muted transition text-primary"
+                 >
+                   <Download size={16} /> Download PDF
+                 </button>
+               </div>
+               <div className="p-4 bg-muted/30 rounded-lg border border-border/50">
+                 <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+                   {report.resolutionReport}
+                 </p>
+               </div>
+             </div>
+          )}
 
           {/* Evidence */}
           <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl p-5">
@@ -210,13 +305,14 @@ export default function ReportDetail() {
                   <select
                     value={statusValue}
                     disabled={updating}
-                    onChange={(e) => handleStatusChange(e.target.value as ComplaintStatus)}
+                    onChange={(e) => handleStatusSelect(e.target.value as ComplaintStatus)}
                     className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-60"
                   >
                     {STATUS_OPTIONS.map((s) => (
                       <option key={s} value={s}>{formatEnum(s)}</option>
                     ))}
                   </select>
+                  
                 </div>
 
                 <div>
@@ -265,6 +361,55 @@ export default function ReportDetail() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+      
+      {/* Modal Overlay for Resolution Report */}
+      {pendingStatus && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
+          <div className="bg-card w-full max-w-2xl rounded-2xl border border-border shadow-2xl overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-border bg-muted/30">
+              <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
+                <FileText className="text-primary" /> Close Incident: {formatEnum(pendingStatus)}
+              </h2>
+              <p className="text-sm text-muted-foreground mt-2">
+                An official Resolution Report is required before closing this case. This report will be permanently attached to the case and available as a downloadable PDF.
+              </p>
+            </div>
+            
+            <div className="p-6 flex-1">
+              <textarea
+                value={resolutionReport}
+                onChange={(e) => setResolutionReport(e.target.value)}
+                placeholder="Detail the investigation findings, actions taken, and the final resolution..."
+                rows={12}
+                className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none shadow-sm"
+              />
+              <p className={`text-xs mt-2 text-right ${resolutionReport.trim().length < 10 ? 'text-destructive' : 'text-success'}`}>
+                {resolutionReport.trim().length < 10 ? `${10 - resolutionReport.trim().length} more characters required` : 'Ready to submit'}
+              </p>
+            </div>
+
+            <div className="p-6 border-t border-border bg-muted/10 flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setPendingStatus(null);
+                  setStatusValue(report.status);
+                }}
+                className="px-6 py-2.5 text-sm font-medium border border-border rounded-xl hover:bg-muted transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmResolution}
+                disabled={resolutionReport.trim().length < 10 || updating}
+                className="px-6 py-2.5 text-sm font-medium bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 disabled:opacity-50 transition shadow-sm"
+              >
+                {updating ? "Saving..." : "Confirm Closure"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

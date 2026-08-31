@@ -47,7 +47,7 @@ export default function NewReportScreen() {
     <Screen padded>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <ScreenHeader
-          title={isAnonymous ? 'Anonymous report' : 'Normal report'}
+          title={isAnonymous ? 'Incident report' : 'Normal report'}
           subtitle={
             isAnonymous
               ? 'Your name is never attached to this report'

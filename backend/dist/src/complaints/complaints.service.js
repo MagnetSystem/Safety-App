@@ -162,6 +162,7 @@ let ComplaintsService = class ComplaintsService {
             where: { id },
             data: {
                 status: dto.status,
+                ...(dto.resolutionReport && { resolutionReport: dto.resolutionReport }),
                 timeline: {
                     create: { status: dto.status, note: dto.note, actorId: user.id },
                 },

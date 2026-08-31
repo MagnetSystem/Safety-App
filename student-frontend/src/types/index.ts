@@ -59,12 +59,17 @@ export interface StudentProfile {
   studentNumber: string | null;
   department: string | null;
   course: string | null;
+  semester: string | null;
   year: number | null;
+  isHosteler: boolean | null;
   mobile: string | null;
   bloodGroup: string | null;
   allergies: string | null;
   medicalConditions: string | null;
+  guardianName: string | null;
   guardianPhone: string | null;
+  emergencyContactName: string | null;
+  emergencyContactPhone: string | null;
   college?: { id: string; name: string; code: string };
   user?: { id: string; email: string };
 }
