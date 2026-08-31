@@ -1,0 +1,48 @@
+# Render blueprint for the Campus Safety backend API.
+# Create a new "Blueprint" service in Render pointed at this repo; Render reads this file.
+# Secrets (sync: false) must be filled in from the Render dashboard after the first deploy.
+services:
+  - type: web
+    name: campus-safety-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    # --include=dev because NODE_ENV=production would otherwise skip the NestJS CLI
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm run start:prod
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      # Supabase Postgres — paste the rotated connection strings here.
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      # Auth — generate fresh values, do NOT reuse the local dev secrets.
+      #   node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
+      - key: JWT_ACCESS_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: JWT_ACCESS_EXPIRES_IN
+        value: 15m
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 7d
+      # Comma-separated allow-list. Add the Vercel admin-portal URL once it exists.
+      - key: CORS_ORIGINS
+        sync: false
+      # Optional — evidence file uploads. Leave blank to disable that feature for testing.
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_EVIDENCE_BUCKET
+        value: evidence
+      # Optional — seed a super-admin on first migrate. Run `npm run prisma:seed` from a shell.
+      - key: SEED_SUPER_ADMIN_EMAIL
+        sync: false
+      - key: SEED_SUPER_ADMIN_PASSWORD
+        sync: false

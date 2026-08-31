@@ -53,6 +53,7 @@ export const spacing = {
 export const radius = {
   sm: 8,
   md: 12,
+  lg: 16,
   input: 16,
   card: 20,
   tabBar: 24,

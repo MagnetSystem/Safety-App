@@ -19,10 +19,6 @@ export const envValidationSchema = Joi.object({
   SUPABASE_SERVICE_ROLE_KEY: Joi.string().allow('').optional(),
   SUPABASE_EVIDENCE_BUCKET: Joi.string().default('evidence'),
 
-  FIREBASE_PROJECT_ID: Joi.string().allow('').optional(),
-  FIREBASE_CLIENT_EMAIL: Joi.string().allow('').optional(),
-  FIREBASE_PRIVATE_KEY: Joi.string().allow('').optional(),
-
   SEED_SUPER_ADMIN_EMAIL: Joi.string().email().optional(),
   SEED_SUPER_ADMIN_PASSWORD: Joi.string().min(8).optional(),
 });

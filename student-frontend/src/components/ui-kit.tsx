@@ -34,13 +34,20 @@ export function StatusPill({ status }: { status: ComplaintStatus }) {
   );
 }
 
-export function ScreenHeader({ title, subtitle, back }: { title: string, subtitle?: string, back?: string }) {
+export function ScreenHeader({ title, subtitle, back, onBack }: { title: string, subtitle?: string, back?: string, onBack?: () => void }) {
   const router = useRouter();
 
   return (
     <View style={styles.headerContainer}>
-      {back && (
-        <Pressable style={styles.backButton} onPress={() => router.canGoBack() ? router.back() : router.replace(back as any)}>
+      {(back || onBack) && (
+        <Pressable
+          style={styles.backButton}
+          onPress={() => {
+            if (onBack) return onBack();
+            if (router.canGoBack()) return router.back();
+            if (back) router.replace(back as any);
+          }}
+        >
           <ChevronLeft size={16} color={colors.indigoink} />
           <Text style={styles.backText}>Back</Text>
         </Pressable>
