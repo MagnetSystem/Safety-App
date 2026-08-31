@@ -90,4 +90,97 @@ Once your work is done, create a Pull Request (PR) to merge `feature/your-featur
 - Keep credentials out of the source code.
 
 ---
+
+## ⚙️ CI/CD Pipeline Setup
+
+This repo has **3 automated GitHub Actions workflows** that trigger on every push to `main`. Here is everything needed to make them active.
+
+### How It Works
+
+| When you push to `main`... | It deploys to... |
+|---|---|
+| Changes in `backend/**` | 🚂 **Railway** (Backend API) |
+| Changes in `Admin-collge-portal/**` | 🔺 **Vercel** (Admin Portal — Production) |
+| Changes in `student-frontend/**` | 📱 **EAS OTA Update** (Student App via Expo Go) |
+
+---
+
+### Step 1 — Add GitHub Repository Secrets
+
+Go to **`github.com/MagnetSystem/Safety-App` → Settings → Secrets and variables → Actions** and add the following:
+
+#### 🚂 Backend → Railway
+| Secret | How to get it |
+|---|---|
+| `RAILWAY_TOKEN` | Railway Dashboard → Account Settings → Tokens → Create Token |
+| `RAILWAY_SERVICE_NAME` | The exact service name in your Railway project |
+| `DATABASE_URL` | Your database connection string (used during build validation) |
+
+#### 🔺 Admin Portal → Vercel
+| Secret | How to get it |
+|---|---|
+| `VERCEL_TOKEN` | Vercel Dashboard → Settings → Tokens → Create |
+| `VERCEL_ORG_ID` | Vercel project settings page, or run `vercel whoami` locally |
+| `VERCEL_PROJECT_ID` | Found in `.vercel/project.json` after running `vercel link` in the admin portal folder |
+| `VITE_API_URL` | Your Railway backend public URL (e.g. `https://your-api.up.railway.app`) |
+
+#### 📱 Student App → EAS (Expo Go)
+| Secret | How to get it |
+|---|---|
+| `EXPO_TOKEN` | [expo.dev](https://expo.dev) → Account → Access Tokens → Create |
+| `EXPO_PUBLIC_API_URL` | Your Railway backend public URL (same as `VITE_API_URL`) |
+
+---
+
+### Step 2 — One-Time EAS Setup (run locally, only once)
+
+Before the student app workflow can run, EAS must be initialised:
+
+```bash
+# 1. Install EAS CLI globally
+npm install --global eas-cli
+
+# 2. Login to your Expo account
+eas login
+
+# 3. Go into the student frontend folder
+cd student-frontend
+
+# 4. Link the project to your Expo account (generates a projectId in app.json)
+eas init
+
+# 5. Configure update channels
+eas update:configure
+
+# 6. Commit the updated app.json
+git add app.json
+git commit -m "chore: link project to EAS"
+git push origin main
+```
+
+---
+
+### Step 3 — Share the App with iOS Testers (Expo Go)
+
+iOS testers do not need an APK. They use the **Expo Go** app:
+
+1. Tester installs **Expo Go** from the App Store
+2. Share your project URL: `https://expo.dev/@YOUR_EXPO_USERNAME/student-app`
+3. Tester taps the link → opens in Expo Go → app loads instantly
+4. Every future push to `main` triggers `eas update` → app updates silently on next open ✅
+
+> **Android testers** can use Expo Go the same way, OR you can run `eas build --profile preview --platform android` to generate a shareable `.apk` install link.
+
+---
+
+### Whose Credentials to Use
+
+Since the code is pushed from a personal account to the company repo, the credentials should belong to **whoever owns the deployment services**. Ideally:
+- Create company accounts on Railway, Vercel, and Expo
+- Generate tokens from those accounts
+- A repo admin stores them as GitHub Secrets in this repo
+- CI/CD then runs entirely under company credentials
+
+---
+
 *Maintained by MagnetSystems.*
