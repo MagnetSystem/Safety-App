@@ -16,10 +16,14 @@ import { categoryLabel, type Report, type StudentProfile } from '../../src/types
 
 function SOSButton() {
   const router = useRouter();
-  const wave1 = React.useRef(new Animated.Value(0)).current;
-  const wave2 = React.useRef(new Animated.Value(0)).current;
+  const wave1Ref = React.useRef<Animated.Value>(null);
+  const wave2Ref = React.useRef<Animated.Value>(null);
+  wave1Ref.current ??= new Animated.Value(0);
+  wave2Ref.current ??= new Animated.Value(0);
 
   React.useEffect(() => {
+    const wave1 = wave1Ref.current!;
+    const wave2 = wave2Ref.current!;
     const createWave = (animValue: Animated.Value) => {
       return Animated.loop(
         Animated.sequence([
@@ -70,8 +74,8 @@ function SOSButton() {
 
   return (
     <View style={styles.sosContainer}>
-      <Animated.View style={[StyleSheet.absoluteFill, styles.sosRing, { backgroundColor: '#e05c5c' }, ringStyle(wave1)]} />
-      <Animated.View style={[StyleSheet.absoluteFill, styles.sosRing, { backgroundColor: '#e05c5c' }, ringStyle(wave2)]} />
+      <Animated.View style={[StyleSheet.absoluteFill, styles.sosRing, { backgroundColor: '#e05c5c' }, ringStyle(wave1Ref.current)]} />
+      <Animated.View style={[StyleSheet.absoluteFill, styles.sosRing, { backgroundColor: '#e05c5c' }, ringStyle(wave2Ref.current)]} />
 
       <Pressable
         onPress={() => {
