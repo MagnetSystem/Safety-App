@@ -1,6 +1,7 @@
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold } from '@expo-google-fonts/inter';
+import * as Notifications from 'expo-notifications';
 import { PhoneFrame } from '../src/components/PhoneFrame';
 import { usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -10,9 +11,27 @@ import { ErrorBoundary } from '../src/components/ErrorBoundary';
 
 SplashScreen.preventAutoHideAsync();
 
+function useNotificationNavigation() {
+  const router = useRouter();
+  useEffect(() => {
+    const openFromData = (data: unknown) => {
+      const complaintId = (data as { complaintId?: string } | undefined)?.complaintId;
+      if (complaintId) router.push(`/reports/${complaintId}`);
+    };
+    Notifications.getLastNotificationResponseAsync().then((res) => {
+      if (res) openFromData(res.notification.request.content.data);
+    });
+    const sub = Notifications.addNotificationResponseReceivedListener((res) => {
+      openFromData(res.notification.request.content.data);
+    });
+    return () => sub.remove();
+  }, [router]);
+}
+
 export default function RootLayout() {
   const pathname = usePathname();
   const isEmergency = pathname.includes('/emergency');
+  useNotificationNavigation();
 
   const [loaded, error] = useFonts({
     Inter_400Regular,

@@ -1,8 +1,9 @@
-import { Controller, Get, Param, ParseUUIDPipe, Patch, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import { NotificationsService } from './notifications.service';
 import { QueryNotificationsDto } from './dto/query-notifications.dto';
+import { RegisterPushTokenDto, RemovePushTokenDto } from './dto/push-token.dto';
 
 @Controller('notifications')
 export class NotificationsController {
@@ -11,6 +12,16 @@ export class NotificationsController {
   @Get()
   findMine(@CurrentUser() user: AuthenticatedUser, @Query() query: QueryNotificationsDto) {
     return this.notificationsService.findForUser(user.id, query);
+  }
+
+  @Post('push-token')
+  registerPushToken(@CurrentUser() user: AuthenticatedUser, @Body() dto: RegisterPushTokenDto) {
+    return this.notificationsService.registerPushToken(user.id, dto.token, dto.platform);
+  }
+
+  @Delete('push-token')
+  removePushToken(@CurrentUser() user: AuthenticatedUser, @Body() dto: RemovePushTokenDto) {
+    return this.notificationsService.removePushToken(user.id, dto.token);
   }
 
   @Patch(':id/read')

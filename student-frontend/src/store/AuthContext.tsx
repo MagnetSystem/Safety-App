@@ -3,6 +3,7 @@ import { useRouter, useSegments } from 'expo-router';
 import { getItem, setItem, deleteItem } from '../services/storage';
 import { setAuthFailureHandler } from '../services/api';
 import { flushSos } from '../services/pendingSos';
+import { registerForPush, unregisterPush } from '../services/push';
 import { login as loginRequest, registerStudent as registerRequest, getMe, RegisterStudentInput } from '../services/authService';
 
 interface SessionUser {
@@ -53,9 +54,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user, segments, isLoading]);
 
-  // Once signed in, deliver any emergency alerts that were queued offline.
+  // Once signed in, flush any offline SOS alerts and register for push.
   useEffect(() => {
-    if (user) flushSos().catch(() => {});
+    if (user) {
+      flushSos().catch(() => {});
+      registerForPush().catch(() => {});
+    }
   }, [user?.id]);
 
   useEffect(() => {
@@ -113,6 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [persistSession]);
 
   const logout = useCallback(async () => {
+    await unregisterPush(); // needs the still-valid token to make the authed call
     await deleteItem('accessToken');
     await deleteItem('refreshToken');
     setUser(null);

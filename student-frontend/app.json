@@ -52,6 +52,12 @@
           "photosPermission": "Campus Safety needs access to your photos so you can attach evidence to a report.",
           "cameraPermission": "Campus Safety needs camera access so you can attach a photo or video as evidence."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#5B6EE8"
+        }
       ]
     ],
     "experiments": {
