@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { useRouter, useSegments } from 'expo-router';
 import { getItem, setItem, deleteItem } from '../services/storage';
+import { setAuthFailureHandler } from '../services/api';
 import { login as loginRequest, registerStudent as registerRequest, getMe, RegisterStudentInput } from '../services/authService';
 
 interface SessionUser {
@@ -29,6 +31,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+  const segments = useSegments();
+
+  // When the axios layer detects a dead session (refresh failed / account
+  // revoked) it calls this — drop the user so the guard below bounces to login.
+  useEffect(() => {
+    setAuthFailureHandler(() => setUser(null));
+    return () => setAuthFailureHandler(null);
+  }, []);
+
+  // Route guard: if the session dies while the user is deep in the app (refresh
+  // failed / account revoked), bounce them to login. The forward direction
+  // (login/register → app) stays with those screens' own explicit navigation.
+  useEffect(() => {
+    if (isLoading) return;
+    const inAuthGroup = segments[0] === '(auth)';
+    if (!user && !inAuthGroup) {
+      router.replace('/(auth)/login');
+    }
+  }, [user, segments, isLoading]);
 
   useEffect(() => {
     (async () => {

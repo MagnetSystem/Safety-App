@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useFocusEffect } from 'expo-router';
-import { MapPin } from 'lucide-react-native';
+import { MapPin, FileCheck2 } from 'lucide-react-native';
 import { Screen } from '../../src/components/PhoneFrame';
 import { Glass, ScreenHeader, StatusPill } from '../../src/components/ui-kit';
 import { getReportById } from '../../src/services/complaintsService';
@@ -95,6 +95,16 @@ export default function ReportDetailScreen() {
           </Glass>
         )}
 
+        {report.resolutionReport && (
+          <Glass style={[styles.card, styles.resolutionCard]}>
+            <View style={styles.resolutionHeader}>
+              <FileCheck2 size={16} color={colors.mintInk} />
+              <Text style={styles.resolutionLabel}>Committee&apos;s resolution</Text>
+            </View>
+            <Text style={styles.bodyText}>{report.resolutionReport}</Text>
+          </Glass>
+        )}
+
         <Glass style={styles.progressCard}>
           <Text style={styles.progressTitle}>Progress</Text>
           <View style={styles.timeline}>
@@ -155,6 +165,21 @@ const styles = StyleSheet.create({
   card: {
     marginBottom: spacing.md,
     padding: spacing.lg,
+  },
+  resolutionCard: {
+    borderColor: 'rgba(79, 184, 155, 0.35)',
+    backgroundColor: 'rgba(225, 245, 238, 0.5)',
+  },
+  resolutionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  resolutionLabel: {
+    ...typography.caption,
+    fontFamily: 'Inter_500Medium',
+    color: colors.mintInk,
   },
   label: {
     ...typography.caption,

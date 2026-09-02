@@ -11,6 +11,14 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+// AuthContext registers a handler here so a dead session (refresh failed /
+// revoked) immediately drops the user back to the login screen instead of
+// leaving them on a screen that just keeps erroring.
+let onAuthFailure: (() => void) | null = null;
+export function setAuthFailureHandler(handler: (() => void) | null) {
+  onAuthFailure = handler;
+}
+
 api.interceptors.request.use(async (config) => {
   const token = await getItem('accessToken');
   if (token) {
@@ -48,6 +56,7 @@ api.interceptors.response.use(
       }
       await deleteItem('accessToken');
       await deleteItem('refreshToken');
+      onAuthFailure?.();
     }
     return Promise.reject(error);
   },

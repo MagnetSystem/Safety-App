@@ -4,6 +4,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -23,7 +24,9 @@ async function bootstrap() {
     }),
   );
 
-  app.useGlobalFilters(new AllExceptionsFilter());
+  // Order matters: Nest checks the last-registered filter first, so the
+  // Prisma-specific filter runs before the catch-all.
+  app.useGlobalFilters(new AllExceptionsFilter(), new PrismaExceptionFilter());
 
   const corsOrigins = (process.env.CORS_ORIGINS ?? '')
     .split(',')

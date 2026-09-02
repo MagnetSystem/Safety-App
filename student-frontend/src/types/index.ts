@@ -40,6 +40,16 @@ export interface TimelineStep {
   createdAt: string;
 }
 
+export interface EvidenceItem {
+  id: string;
+  type: EvidenceType;
+  fileName: string;
+  mimeType?: string | null;
+  sizeBytes?: number | null;
+  createdAt: string;
+  downloadUrl?: string;
+}
+
 export interface Report {
   id: string;
   code: string;
@@ -50,8 +60,12 @@ export interface Report {
   createdAt: string;
   location?: string | null;
   incidentDate?: string | null;
+  resolutionReport?: string | null;
   timeline: TimelineStep[];
+  evidence?: EvidenceItem[];
 }
+
+export type EvidenceType = 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT';
 
 export interface StudentProfile {
   id: string;
