@@ -23,6 +23,7 @@ model User {
   complaintMessages  ComplaintMessage[]
   complaintTimelines ComplaintTimeline[]
   notifications      Notification[]
+  passwordResets     PasswordResetToken[]
   pushTokens         PushToken[]
   student            Student?
 
@@ -209,6 +210,20 @@ model Notification {
 
   @@index([userId, isRead])
   @@map("notifications")
+}
+
+/// Single-use password reset tokens. Only the hash is stored.
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
 }
 
 /// Expo push tokens, one row per device. Used to deliver notifications

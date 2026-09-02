@@ -60,7 +60,6 @@ const AppRoutes = () => {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/register" element={<RegisterCollege />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
       </Route>
       
       {/* College Admin Routes â€” protected */}

@@ -1,19 +1,26 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Mail } from "lucide-react";
+import { forgotPassword } from "../../services/authService";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // There is no self-service email reset yet — account resets are performed
-    // by the Super Admin. This just confirms the request was noted.
-    setLoading(false);
-    setSent(true);
+    try {
+      const res = await forgotPassword(email);
+      setMessage(res.message);
+    } catch {
+      setMessage("If that email has an account, a reset link is on its way.");
+    } finally {
+      setLoading(false);
+      setSent(true);
+    }
   };
 
   return (
@@ -66,10 +73,9 @@ export default function ForgotPassword() {
           <div className="inline-flex items-center justify-center h-12 w-12 rounded-full bg-success/15 text-success mb-4">
             <Mail size={22} />
           </div>
-          <h2 className="text-lg font-semibold">Request noted</h2>
+          <h2 className="text-lg font-semibold">Check your email</h2>
           <p className="text-sm text-muted-foreground mt-2">
-            Self-service email reset isn't available yet — please ask your Super Admin to reset
-            the password for <strong>{email}</strong> from the College Admins page.
+            {message} The link is valid for one hour.
           </p>
           <Link
             to="/login"

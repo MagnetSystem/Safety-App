@@ -8,14 +8,19 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import type { JwtSignOptions } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
+import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterStudentDto } from './dto/register-student.dto';
 import { RegisterCollegeDto } from './dto/register-college.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { MailService } from './mail.service';
 import type { JwtPayload } from './types/jwt-payload.interface';
 
 const BCRYPT_ROUNDS = 10;
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 @Injectable()
 export class AuthService {
@@ -23,6 +28,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly mail: MailService,
   ) {}
 
   async registerStudent(dto: RegisterStudentDto) {
@@ -152,6 +158,67 @@ export class AuthService {
     if (!user || !user.isActive) throw new UnauthorizedException('Account no longer active');
 
     return this.issueTokens(user.id, user.email, user.role, payload.collegeId);
+  }
+
+  /**
+   * Always resolves the same way whether or not the email exists — never
+   * reveal which addresses have accounts.
+   */
+  async forgotPassword(dto: ForgotPasswordDto) {
+    const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    if (user && user.isActive) {
+      const rawToken = randomBytes(32).toString('hex');
+      const tokenHash = createHash('sha256').update(rawToken).digest('hex');
+
+      await this.prisma.passwordResetToken.create({
+        data: {
+          userId: user.id,
+          tokenHash,
+          expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
+        },
+      });
+
+      const link = this.buildResetLink(user.role, rawToken);
+      await this.mail.send(
+        user.email,
+        'Reset your Campus Safety password',
+        `We received a request to reset your password.\n\nOpen this link to choose a new one (valid for 1 hour):\n${link}\n\nIf you didn't ask for this, you can ignore this email.`,
+      );
+    }
+    return { message: 'If that email has an account, a reset link is on its way.' };
+  }
+
+  private buildResetLink(role: JwtPayload['role'], token: string): string {
+    if (role === 'STUDENT') {
+      const scheme = this.configService.get<string>('STUDENT_APP_SCHEME') ?? 'studentapp';
+      return `${scheme}://reset-password?token=${token}`;
+    }
+    const base = this.configService.get<string>('ADMIN_PORTAL_URL') ?? '';
+    return `${base}/reset-password?token=${token}`;
+  }
+
+  async resetPassword(dto: ResetPasswordDto) {
+    const tokenHash = createHash('sha256').update(dto.token).digest('hex');
+    const record = await this.prisma.passwordResetToken.findUnique({ where: { tokenHash } });
+
+    if (!record || record.usedAt || record.expiresAt < new Date()) {
+      throw new BadRequestException('This reset link is invalid or has expired.');
+    }
+
+    const passwordHash = await bcrypt.hash(dto.newPassword, BCRYPT_ROUNDS);
+    await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: record.userId }, data: { passwordHash } }),
+      this.prisma.passwordResetToken.update({
+        where: { id: record.id },
+        data: { usedAt: new Date() },
+      }),
+      // Invalidate any other outstanding tokens for this user.
+      this.prisma.passwordResetToken.deleteMany({
+        where: { userId: record.userId, usedAt: null, id: { not: record.id } },
+      }),
+    ]);
+
+    return { message: 'Your password has been updated. You can now sign in.' };
   }
 
   async changePassword(userId: string, dto: ChangePasswordDto) {

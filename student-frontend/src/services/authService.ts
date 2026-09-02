@@ -32,3 +32,13 @@ export const getMe = async () => {
   const { data } = await api.get('/auth/me');
   return data;
 };
+
+export const forgotPassword = async (email: string) => {
+  const { data } = await api.post<{ message: string }>('/auth/forgot-password', { email });
+  return data;
+};
+
+export const resetPassword = async (token: string, newPassword: string) => {
+  const { data } = await api.post<{ message: string }>('/auth/reset-password', { token, newPassword });
+  return data;
+};

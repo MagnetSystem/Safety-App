@@ -1,27 +1,41 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Eye, EyeOff, Lock } from "lucide-react";
+import { resetPassword } from "../../services/authService";
 
 export default function ResetPassword() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const token = params.get("token") ?? "";
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const [form, setForm] = useState({ password: "", confirm: "" });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
     if (form.password !== form.confirm) {
-      alert("Passwords do not match");
+      setError("Passwords do not match");
+      return;
+    }
+    if (!token) {
+      setError("This reset link is missing its token. Request a new one.");
       return;
     }
     setLoading(true);
-
-    // TODO: call reset password API with token from URL
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      await resetPassword(token, form.password);
       navigate("/login");
-    }, 1000);
+    } catch (err) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        "This reset link is invalid or has expired.";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -35,6 +49,12 @@ export default function ResetPassword() {
           Choose a strong password for your account
         </p>
       </div>
+
+      {error && (
+        <div className="mb-4 px-3.5 py-2.5 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+          {error}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
         <div>

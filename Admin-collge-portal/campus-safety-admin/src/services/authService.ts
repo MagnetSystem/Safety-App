@@ -32,6 +32,16 @@ export const changePassword = async (currentPassword: string, newPassword: strin
   return data;
 };
 
+export const forgotPassword = async (email: string) => {
+  const { data } = await api.post<{ message: string }>('/auth/forgot-password', { email });
+  return data;
+};
+
+export const resetPassword = async (token: string, newPassword: string) => {
+  const { data } = await api.post<{ message: string }>('/auth/reset-password', { token, newPassword });
+  return data;
+};
+
 export interface RegisterCollegeInput {
   collegeName: string;
   collegeCode: string;

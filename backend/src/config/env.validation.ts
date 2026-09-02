@@ -21,4 +21,17 @@ export const envValidationSchema = Joi.object({
 
   SEED_SUPER_ADMIN_EMAIL: Joi.string().email().optional(),
   SEED_SUPER_ADMIN_PASSWORD: Joi.string().min(8).optional(),
+
+  // Email (password reset). If SMTP is not configured the reset link is
+  // logged to the server console instead of sent — fine for testing.
+  SMTP_URL: Joi.string().allow('').optional(),
+  SMTP_HOST: Joi.string().allow('').optional(),
+  SMTP_PORT: Joi.number().optional(),
+  SMTP_USER: Joi.string().allow('').optional(),
+  SMTP_PASS: Joi.string().allow('').optional(),
+  MAIL_FROM: Joi.string().default('Campus Safety <no-reply@campus-safety.app>'),
+
+  // Where password-reset links point.
+  ADMIN_PORTAL_URL: Joi.string().uri().allow('').optional(),
+  STUDENT_APP_SCHEME: Joi.string().default('studentapp'),
 });

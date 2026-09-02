@@ -91,6 +91,10 @@ export default function LoginScreen() {
           <Text style={styles.linkText}>New here? Create an account</Text>
         </Pressable>
 
+        <Pressable onPress={() => router.push('/(auth)/forgot-password' as any)}>
+          <Text style={styles.forgotText}>Forgot your password?</Text>
+        </Pressable>
+
         <Text style={styles.footnote}>
           Your details stay private. Incident reports never show your name to anyone on the committee.
         </Text>
@@ -161,6 +165,12 @@ const styles = StyleSheet.create({
     color: colors.indigoink,
     textAlign: 'center',
     marginTop: spacing.xl,
+  },
+  forgotText: {
+    ...typography.caption,
+    color: colors.subink,
+    textAlign: 'center',
+    marginTop: spacing.md,
   },
   footnote: {
     ...typography.caption,
