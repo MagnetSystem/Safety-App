@@ -6,6 +6,7 @@ import { PhoneFrame } from '../src/components/PhoneFrame';
 import { usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 import { AuthProvider } from '../src/store/AuthContext';
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
 
@@ -14,6 +15,8 @@ SplashScreen.preventAutoHideAsync();
 function useNotificationNavigation() {
   const router = useRouter();
   useEffect(() => {
+    if (Platform.OS === 'web') return;
+
     const openFromData = (data: unknown) => {
       const complaintId = (data as { complaintId?: string } | undefined)?.complaintId;
       if (complaintId) router.push(`/reports/${complaintId}`);
