@@ -1,8 +1,38 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Loader2, Eye } from "lucide-react";
+import { Loader2, Eye, Download } from "lucide-react";
 import { getReports } from "../../services/complaintsService";
 import { formatEnum, type ComplaintStatus, type Report } from "../../types/report";
+
+function toCsv(rows: Report[]): string {
+  const header = ["Code", "Type", "Category", "Reporter", "Status", "Priority", "Created", "Location"];
+  const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const lines = rows.map((r) =>
+    [
+      r.code,
+      formatEnum(r.type),
+      formatEnum(r.category),
+      r.reporterLabel ?? "Anonymous Student",
+      formatEnum(r.status),
+      formatEnum(r.priority),
+      new Date(r.createdAt).toISOString(),
+      r.location ?? "",
+    ]
+      .map(esc)
+      .join(","),
+  );
+  return [header.join(","), ...lines].join("\r\n");
+}
+
+function downloadCsv(rows: Report[]) {
+  const blob = new Blob([toCsv(rows)], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `reports-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 const STATUS_TABS: { label: string; value: ComplaintStatus | "All" }[] = [
   { label: "All", value: "All" },
@@ -35,6 +65,13 @@ export default function ReportsList() {
           <h1 className="text-xl sm:text-2xl font-semibold">Reports</h1>
           <p className="text-sm text-muted-foreground">Manage and act on all college reports</p>
         </div>
+        <button
+          onClick={() => downloadCsv(reports)}
+          disabled={reports.length === 0}
+          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border border-border text-sm hover:bg-muted transition disabled:opacity-50"
+        >
+          <Download size={15} /> Export CSV
+        </button>
       </div>
 
       {/* Status tabs */}

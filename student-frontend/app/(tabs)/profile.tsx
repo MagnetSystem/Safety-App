@@ -1,10 +1,14 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, TextInput } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, TextInput, Alert } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { HeartPulse, Edit2, Check, X } from 'lucide-react-native';
+import { File, Paths } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import { HeartPulse, Edit2, Check, X, Download, Trash2 } from 'lucide-react-native';
 import { Screen } from '../../src/components/PhoneFrame';
 import { Glass, ScreenHeader, GlassInput } from '../../src/components/ui-kit';
-import { getMyProfile, updateMyProfile } from '../../src/services/studentsService';
+import {
+  getMyProfile, updateMyProfile, exportMyData, deleteMyAccount,
+} from '../../src/services/studentsService';
 import type { StudentProfile } from '../../src/types';
 import { colors, radius, spacing, typography } from '../../src/constants/theme';
 import { useAuth } from '../../src/store/AuthContext';
@@ -74,9 +78,54 @@ export default function ProfileScreen() {
     }, [])
   );
 
+  const [busy, setBusy] = useState<null | 'export' | 'delete'>(null);
+
   const handleSignOut = async () => {
     await logout();
     router.replace('/(auth)/login');
+  };
+
+  const handleExport = async () => {
+    setBusy('export');
+    try {
+      const data = await exportMyData();
+      const file = new File(Paths.cache, `campus-safety-data-${Date.now()}.json`);
+      file.write(JSON.stringify(data, null, 2));
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(file.uri, { mimeType: 'application/json' });
+      } else {
+        Alert.alert('Export ready', `Saved to ${file.uri}`);
+      }
+    } catch {
+      Alert.alert('Could not export', 'Please try again in a moment.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete your account?',
+      'Your profile and personal details are permanently removed. Reports you filed are kept for the committee but no longer linked to you. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setBusy('delete');
+            try {
+              await deleteMyAccount();
+              await logout();
+              router.replace('/(auth)/login');
+            } catch {
+              setBusy(null);
+              Alert.alert('Could not delete', 'Please try again in a moment.');
+            }
+          },
+        },
+      ],
+    );
   };
   
   const handleSave = async () => {
@@ -193,6 +242,23 @@ export default function ProfileScreen() {
                 <View style={styles.divider} />
                 <Row label="Blood group" value={profile?.bloodGroup ?? NOT_SET} />
               </View>
+            </Glass>
+
+            <Glass style={styles.privacyCard}>
+              <Text style={styles.sectionHeader}>Privacy &amp; data</Text>
+              <Pressable style={styles.privacyRow} onPress={handleExport} disabled={busy !== null}>
+                <Download size={16} color={colors.indigoink} />
+                <Text style={styles.privacyRowText}>
+                  {busy === 'export' ? 'Preparing…' : 'Export my data'}
+                </Text>
+              </Pressable>
+              <View style={styles.divider} />
+              <Pressable style={styles.privacyRow} onPress={handleDeleteAccount} disabled={busy !== null}>
+                <Trash2 size={16} color="#C0433E" />
+                <Text style={[styles.privacyRowText, styles.deleteText]}>
+                  {busy === 'delete' ? 'Deleting…' : 'Delete my account'}
+                </Text>
+              </Pressable>
             </Glass>
 
             <Pressable style={styles.signOutBtn} onPress={handleSignOut}>
@@ -374,6 +440,25 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.6)',
+  },
+  privacyCard: {
+    marginTop: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  privacyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  privacyRowText: {
+    ...typography.body,
+    fontSize: 14,
+    color: colors.ink,
+  },
+  deleteText: {
+    color: '#C0433E',
   },
   signOutBtn: {
     marginTop: spacing.xl,

@@ -82,4 +82,58 @@ export class StudentsService {
       include: PROFILE_INCLUDE,
     });
   }
+
+  /** Everything we hold about this student, as a single JSON document. */
+  async exportMe(userId: string) {
+    const student = await this.prisma.student.findUnique({
+      where: { userId },
+      include: {
+        user: { select: { email: true, role: true, createdAt: true } },
+        college: { select: { name: true, code: true } },
+        complaints: {
+          orderBy: { createdAt: 'asc' },
+          include: {
+            timeline: { orderBy: { createdAt: 'asc' } },
+            messages: { orderBy: { createdAt: 'asc' } },
+            evidence: { select: { fileName: true, type: true, createdAt: true } },
+          },
+        },
+      },
+    });
+    if (!student) throw new NotFoundException('Student profile not found');
+
+    const notifications = await this.prisma.notification.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'asc' },
+      select: { type: true, title: true, body: true, isRead: true, createdAt: true },
+    });
+
+    return {
+      exportedAt: new Date().toISOString(),
+      account: student.user,
+      college: student.college,
+      profile: student,
+      notifications,
+    };
+  }
+
+  /**
+   * Hard-deletes the student's account. Their reports are kept for the
+   * committee's records but detached (studentId set to null), so nothing
+   * personally identifies them any more.
+   */
+  async deleteMe(userId: string) {
+    const student = await this.prisma.student.findUnique({ where: { userId } });
+    if (!student) throw new NotFoundException('Student profile not found');
+
+    await this.prisma.$transaction([
+      this.prisma.complaint.updateMany({
+        where: { studentId: student.id },
+        data: { studentId: null },
+      }),
+      this.prisma.user.delete({ where: { id: userId } }),
+    ]);
+
+    return { success: true };
+  }
 }
