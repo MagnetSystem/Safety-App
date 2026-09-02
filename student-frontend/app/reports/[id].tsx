@@ -1,16 +1,18 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, Linking, Pressable } from 'react-native';
 import { useLocalSearchParams, useFocusEffect } from 'expo-router';
-import { MapPin, FileCheck2 } from 'lucide-react-native';
+import { MapPin, FileCheck2, Paperclip } from 'lucide-react-native';
 import { Screen } from '../../src/components/PhoneFrame';
 import { Glass, ScreenHeader, StatusPill } from '../../src/components/ui-kit';
 import { getReportById } from '../../src/services/complaintsService';
-import { categoryLabel, statusLabel, WORKFLOW_STATUSES, type Report } from '../../src/types';
+import { getEvidence } from '../../src/services/evidenceService';
+import { categoryLabel, statusLabel, WORKFLOW_STATUSES, type EvidenceItem, type Report } from '../../src/types';
 import { colors, radius, spacing, typography } from '../../src/constants/theme';
 
 export default function ReportDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [report, setReport] = useState<Report | null>(null);
+  const [evidence, setEvidence] = useState<EvidenceItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -18,9 +20,13 @@ export default function ReportDetailScreen() {
   const load = useCallback((isRefresh = false) => {
     if (!id) return;
     if (isRefresh) setRefreshing(true);
-    getReportById(id)
-      .then((data) => {
+    Promise.all([
+      getReportById(id),
+      getEvidence(id).catch(() => [] as EvidenceItem[]),
+    ])
+      .then(([data, ev]) => {
         setReport(data);
+        setEvidence(ev);
         setError(null);
       })
       .catch(() => setError('Could not load this report.'))
@@ -105,6 +111,24 @@ export default function ReportDetailScreen() {
           </Glass>
         )}
 
+        {evidence.length > 0 && (
+          <Glass style={styles.card}>
+            <Text style={styles.label}>Evidence you attached</Text>
+            <View style={styles.evidenceList}>
+              {evidence.map((e) => (
+                <Pressable
+                  key={e.id}
+                  style={styles.evidenceRow}
+                  onPress={() => e.downloadUrl && Linking.openURL(e.downloadUrl)}
+                >
+                  <Paperclip size={15} color={colors.indigoink} />
+                  <Text style={styles.evidenceName} numberOfLines={1}>{e.fileName}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </Glass>
+        )}
+
         <Glass style={styles.progressCard}>
           <Text style={styles.progressTitle}>Progress</Text>
           <View style={styles.timeline}>
@@ -180,6 +204,20 @@ const styles = StyleSheet.create({
     ...typography.caption,
     fontFamily: 'Inter_500Medium',
     color: colors.mintInk,
+  },
+  evidenceList: {
+    gap: spacing.sm,
+  },
+  evidenceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  evidenceName: {
+    ...typography.body,
+    fontSize: 13,
+    color: colors.indigoink,
+    flex: 1,
   },
   label: {
     ...typography.caption,
