@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import { Search, Loader2 } from "lucide-react";
+import { Search, Loader2, ChevronLeft, ChevronRight, Building } from "lucide-react";
 import { getAuditLogs, type AuditLogEntry } from "../../services/auditLogsService";
+import { getColleges } from "../../services/collegesService";
 import { formatEnum } from "../../types/report";
+import { useAuth } from "../../context/AuthContext";
 
 function timeAgo(iso: string) {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -16,17 +18,34 @@ function timeAgo(iso: string) {
 }
 
 export default function AuditLogs() {
+  const { role } = useAuth();
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [colleges, setColleges] = useState<{ id: string; name: string }[]>([]);
+  const [selectedCollegeId, setSelectedCollegeId] = useState("");
 
   useEffect(() => {
-    getAuditLogs({ pageSize: 100 })
-      .then((res) => setLogs(res.items))
+    if (role === 'super_admin') {
+      getColleges({ pageSize: 100 })
+        .then(res => setColleges(res.items))
+        .catch(console.error);
+    }
+  }, [role]);
+
+  useEffect(() => {
+    setLoading(true);
+    getAuditLogs({ page, pageSize: 20, collegeId: selectedCollegeId || undefined })
+      .then((res) => {
+        setLogs(res.items);
+        setTotalPages(Math.ceil(res.total / res.pageSize));
+      })
       .catch(() => setError("Could not load audit logs."))
       .finally(() => setLoading(false));
-  }, []);
+  }, [page, selectedCollegeId]);
 
   const filtered = logs.filter((l) => {
     const q = search.toLowerCase();
@@ -48,14 +67,35 @@ export default function AuditLogs() {
         </p>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search logs..."
-          className="w-full pl-9 pr-4 py-2 rounded-lg bg-card border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-        />
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="relative max-w-sm flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search logs on this page..."
+            className="w-full pl-9 pr-4 py-2 rounded-lg bg-card border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </div>
+        
+        {role === 'super_admin' && (
+          <div className="relative max-w-[250px]">
+            <Building className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <select
+              value={selectedCollegeId}
+              onChange={(e) => {
+                setSelectedCollegeId(e.target.value);
+                setPage(1);
+              }}
+              className="w-full pl-9 pr-4 py-2 rounded-lg bg-card border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 appearance-none"
+            >
+              <option value="">All Colleges</option>
+              {colleges.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {error && (
@@ -100,6 +140,30 @@ export default function AuditLogs() {
           </div>
         )}
       </div>
+
+      {!loading && totalPages > 1 && (
+        <div className="flex items-center justify-between border border-border bg-card/60 rounded-xl px-4 py-3 backdrop-blur-xl">
+          <p className="text-sm text-muted-foreground">
+            Page {page} of {totalPages}
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="p-1.5 rounded-lg border border-border hover:bg-muted disabled:opacity-50 transition"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="p-1.5 rounded-lg border border-border hover:bg-muted disabled:opacity-50 transition"
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

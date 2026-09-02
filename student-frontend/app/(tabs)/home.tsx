@@ -148,10 +148,6 @@ export default function HomeScreen() {
 
         <View style={styles.heroSection}>
           <SOSButton />
-          <Pressable style={styles.helpLink} onPress={() => router.push('/help' as any)}>
-            <LifeBuoy size={14} strokeWidth={1.8} color={colors.indigoink} />
-            <Text style={styles.helpLinkText}>Helplines &amp; someone to talk to</Text>
-          </Pressable>
         </View>
 
         <View style={styles.actionGrid}>
@@ -205,6 +201,11 @@ export default function HomeScreen() {
             </View>
           )}
         </View>
+
+        <Pressable style={styles.helpLink} onPress={() => router.push('/help' as any)}>
+          <LifeBuoy size={14} strokeWidth={1.8} color={colors.indigoink} />
+          <Text style={styles.helpLinkText}>Helplines &amp; someone to talk to</Text>
+        </Pressable>
       </ScrollView>
     </Screen>
   );
@@ -272,6 +273,7 @@ const styles = StyleSheet.create({
     zIndex: -1,
   },
   helpLink: {
+    alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,

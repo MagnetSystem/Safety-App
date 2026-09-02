@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
   ArrowLeft, Download, MessageSquare,
-  MapPin, Clock, Loader2, FileImage, FileText
+  MapPin, Clock, Loader2, FileImage, FileText, ExternalLink
 } from "lucide-react";
 import {
   getReportById, updateReportStatus, getEvidence, getMessages, postMessage,
@@ -24,7 +24,7 @@ const STATUS_OPTIONS: ComplaintStatus[] = [
 export default function ReportDetail() {
   const { id } = useParams();
   const { role } = useAuth();
-  const canManage = role === "college_admin";
+  const canManage = role === "college_admin" || role === "super_admin";
   const [report, setReport] = useState<Report | null>(null);
   const [evidence, setEvidence] = useState<Evidence[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,10 +35,6 @@ export default function ReportDetail() {
   const [pendingStatus, setPendingStatus] = useState<ComplaintStatus | null>(null);
   const [resolutionReport, setResolutionReport] = useState("");
   const [updating, setUpdating] = useState(false);
-  
-  // Note State
-  const [note, setNote] = useState("");
-  const [savingNote, setSavingNote] = useState(false);
 
   // Student conversation
   const [messages, setMessages] = useState<ComplaintMessage[]>([]);
@@ -113,20 +109,6 @@ export default function ReportDetail() {
   const handleConfirmResolution = () => {
     if (pendingStatus && resolutionReport.trim().length > 10) {
       submitStatusChange(pendingStatus, resolutionReport.trim());
-    }
-  };
-
-  const handleAddNote = async () => {
-    if (!id || !report || !note.trim()) return;
-    setSavingNote(true);
-    try {
-      const updated = await updateReportStatus(id, report.status, note.trim());
-      setReport(updated);
-      setNote("");
-    } catch {
-      setError("Could not add note.");
-    } finally {
-      setSavingNote(false);
     }
   };
 
@@ -241,15 +223,33 @@ export default function ReportDetail() {
                   <MapPin size={16} /> {report.location}
                 </div>
               )}
-              {report.gpsLat != null && report.gpsLng != null && (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <MapPin size={16} /> {report.gpsLat.toFixed(4)}, {report.gpsLng.toFixed(4)}
-                </div>
-              )}
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Clock size={16} /> {new Date(report.createdAt).toLocaleString()}
               </div>
             </div>
+
+            {report.gpsLat != null && report.gpsLng != null && (
+              <div className="pt-2">
+                <a
+                  href={`https://www.google.com/maps?q=${report.gpsLat},${report.gpsLng}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block relative w-full h-40 rounded-xl overflow-hidden border border-border group"
+                >
+                  <iframe
+                    title="Location Map"
+                    src={`https://www.openstreetmap.org/export/embed.html?bbox=${report.gpsLng - 0.005},${report.gpsLat - 0.005},${report.gpsLng + 0.005},${report.gpsLat + 0.005}&layer=mapnik&marker=${report.gpsLat},${report.gpsLng}`}
+                    className="w-full h-full pointer-events-none"
+                    frameBorder="0"
+                  />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition flex items-center justify-center opacity-0 group-hover:opacity-100 backdrop-blur-[1px]">
+                    <div className="bg-background/90 text-foreground px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium shadow-xl">
+                      <ExternalLink size={16} /> Open in Google Maps
+                    </div>
+                  </div>
+                </a>
+              </div>
+            )}
           </div>
           
           {/* Resolution Report */}
@@ -305,7 +305,7 @@ export default function ReportDetail() {
             </h3>
             <p className="text-xs text-muted-foreground mb-4">
               These messages are visible to the person who filed the report. Use this to ask for
-              more information. For private notes, use “Add Internal Note” in the sidebar.
+              more information.
             </p>
 
             {messages.length === 0 ? (
@@ -396,24 +396,6 @@ export default function ReportDetail() {
                     ))}
                   </select>
                   
-                </div>
-
-                <div>
-                  <label className="text-sm text-muted-foreground">Add Internal Note</label>
-                  <textarea
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    rows={3}
-                    placeholder="Write a note for this case…"
-                    className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  />
-                  <button
-                    onClick={handleAddNote}
-                    disabled={savingNote || !note.trim()}
-                    className="mt-2 w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted transition disabled:opacity-60"
-                  >
-                    <MessageSquare size={16} /> {savingNote ? "Saving…" : "Add Note"}
-                  </button>
                 </div>
               </>
             ) : (

@@ -18,3 +18,8 @@ export const getStudentById = async (id: string) => {
   const { data } = await api.get<Student>(`/students/${id}`);
   return data;
 };
+
+export const resetStudentPassword = async (id: string, newPassword: string) => {
+  const { data } = await api.patch(`/students/${id}/reset-password`, { newPassword });
+  return data;
+};

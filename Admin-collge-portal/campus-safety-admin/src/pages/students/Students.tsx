@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { Search, Loader2 } from "lucide-react";
-import { getStudents } from "../../services/studentsService";
+import { getStudents, resetStudentPassword } from "../../services/studentsService";
 import type { Student } from "../../types/student";
+import { useAuth } from "../../context/AuthContext";
 
 export default function Students() {
+  const { role } = useAuth();
   const [students, setStudents] = useState<Student[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -19,6 +21,21 @@ export default function Students() {
     }, 300);
     return () => clearTimeout(handle);
   }, [query]);
+
+  const handleResetPassword = async (s: Student) => {
+    const newPassword = window.prompt(`New password for ${s.user?.email || s.name} (min 8 characters):`);
+    if (!newPassword) return;
+    if (newPassword.length < 8) {
+      window.alert("Password must be at least 8 characters.");
+      return;
+    }
+    try {
+      await resetStudentPassword(s.id, newPassword);
+      window.alert("Password reset successfully.");
+    } catch {
+      window.alert("Could not reset password.");
+    }
+  };
 
   return (
     <div className="p-4 sm:p-6 space-y-5 max-w-[1400px] mx-auto">
@@ -62,6 +79,9 @@ export default function Students() {
                   <th className="text-left font-medium px-4 py-3 hidden sm:table-cell">Year</th>
                   <th className="text-left font-medium px-4 py-3 hidden lg:table-cell">Hosteler</th>
                   <th className="text-left font-medium px-4 py-3 hidden lg:table-cell">Email</th>
+                  {role === 'super_admin' && (
+                    <th className="text-right font-medium px-4 py-3">Actions</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -73,6 +93,16 @@ export default function Students() {
                     <td className="px-4 py-3 hidden sm:table-cell">{s.year ?? "—"}</td>
                     <td className="px-4 py-3 hidden lg:table-cell">{s.isHosteler ? "Yes" : "No"}</td>
                     <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground">{s.user?.email ?? "—"}</td>
+                    {role === 'super_admin' && (
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          onClick={() => handleResetPassword(s)}
+                          className="text-xs font-medium px-2.5 py-1 rounded-lg border border-border hover:bg-muted"
+                        >
+                          Reset Password
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

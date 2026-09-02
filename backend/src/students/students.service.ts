@@ -1,10 +1,14 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import * as bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import { QueryStudentsDto } from './dto/query-students.dto';
 import { UpdateStudentProfileDto } from './dto/update-student-profile.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { Paginated } from '../common/dto/pagination.dto';
+
+const BCRYPT_ROUNDS = 10;
 
 const PROFILE_INCLUDE = {
   user: { select: { id: true, email: true, isActive: true, createdAt: true } },
@@ -134,6 +138,15 @@ export class StudentsService {
       this.prisma.user.delete({ where: { id: userId } }),
     ]);
 
+    return { success: true };
+  }
+
+  async resetPassword(studentId: string, dto: ResetPasswordDto) {
+    const student = await this.prisma.student.findUnique({ where: { id: studentId } });
+    if (!student) throw new NotFoundException('Student profile not found');
+
+    const passwordHash = await bcrypt.hash(dto.newPassword, BCRYPT_ROUNDS);
+    await this.prisma.user.update({ where: { id: student.userId }, data: { passwordHash } });
     return { success: true };
   }
 }

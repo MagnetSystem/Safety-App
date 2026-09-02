@@ -7,6 +7,7 @@ import type { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import { StudentsService } from './students.service';
 import { QueryStudentsDto } from './dto/query-students.dto';
 import { UpdateStudentProfileDto } from './dto/update-student-profile.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 @Controller('students')
 export class StudentsController {
@@ -49,5 +50,12 @@ export class StudentsController {
   @Audit({ action: 'STUDENT_PROFILE_VIEWED', entityType: 'Student' })
   findOne(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.studentsService.findOneForRequester(user, id);
+  }
+
+  @Patch(':id/reset-password')
+  @Roles(UserRole.SUPER_ADMIN)
+  @Audit({ action: 'STUDENT_PASSWORD_RESET', entityType: 'Student' })
+  resetPassword(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ResetPasswordDto) {
+    return this.studentsService.resetPassword(id, dto);
   }
 }
