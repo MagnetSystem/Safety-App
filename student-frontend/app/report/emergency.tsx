@@ -11,7 +11,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../src/store/AuthContext';
 import { getMyProfile } from '../../src/services/studentsService';
 import { createComplaint } from '../../src/services/complaintsService';
+import { queueSos } from '../../src/services/pendingSos';
+import { heavyFeedback, successFeedback, warningFeedback } from '../../src/services/haptics';
 import { CATEGORY_OPTIONS, categoryLabel, type IncidentCategoryEnum } from '../../src/types';
+
+function isNetworkError(err: any): boolean {
+  return !err?.response || err?.code === 'ERR_NETWORK' || err?.message === 'Network Error';
+}
 
 export default function EmergencyScreen() {
   const router = useRouter();
@@ -19,6 +25,7 @@ export default function EmergencyScreen() {
   const [note, setNote] = useState('');
   const [category, setCategory] = useState<IncidentCategoryEnum>(CATEGORY_OPTIONS[0]);
   const [submitted, setSubmitted] = useState(false);
+  const [queuedOffline, setQueuedOffline] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [locationStatus, setLocationStatus] = useState<'idle' | 'active' | 'denied'>('idle');
@@ -33,6 +40,7 @@ export default function EmergencyScreen() {
   const handleSend = async () => {
     setError(null);
     setSending(true);
+    heavyFeedback();
 
     let gps: { gpsLat?: number; gpsLng?: number; gpsAccuracy?: number } = {};
     try {
@@ -54,19 +62,30 @@ export default function EmergencyScreen() {
 
     const deviceInfo = `${Device.modelName ?? Platform.OS} · ${Device.osName ?? Platform.OS} ${Device.osVersion ?? Platform.Version}`;
 
+    const payload = {
+      type: 'EMERGENCY' as const,
+      category,
+      description: note.trim() || 'Emergency SOS alert — no additional details provided.',
+      gpsLat: gps.gpsLat,
+      gpsLng: gps.gpsLng,
+      gpsAccuracy: gps.gpsAccuracy,
+      deviceInfo,
+    };
+
     try {
-      await createComplaint({
-        type: 'EMERGENCY',
-        category,
-        description: note.trim() || 'Emergency SOS alert — no additional details provided.',
-        gpsLat: gps.gpsLat,
-        gpsLng: gps.gpsLng,
-        gpsAccuracy: gps.gpsAccuracy,
-        deviceInfo,
-      });
+      await createComplaint(payload);
+      successFeedback();
       setSubmitted(true);
     } catch (err: any) {
-      setError(err?.response?.data?.message ?? 'Could not send the alert. Check your connection and try again.');
+      if (isNetworkError(err)) {
+        // No connection — keep the alert and send it the moment we're back online.
+        await queueSos(payload);
+        warningFeedback();
+        setQueuedOffline(true);
+        setSubmitted(true);
+      } else {
+        setError(err?.response?.data?.message ?? 'Could not send the alert. Please try again.');
+      }
     } finally {
       setSending(false);
     }
@@ -77,12 +96,16 @@ export default function EmergencyScreen() {
       <Screen padded style={styles.successScreen}>
         <View style={styles.successContent}>
           <CheckCircle2 size={80} strokeWidth={1.5} color="#FFFFFF" />
-          <Text style={styles.successTitle}>Alert sent</Text>
+          <Text style={styles.successTitle}>{queuedOffline ? 'Alert saved' : 'Alert sent'}</Text>
           <Text style={styles.successDesc}>
-            Your college safety committee has been notified{locationStatus === 'active' ? ' with your live location' : ''}.
+            {queuedOffline
+              ? "You're offline right now. Your alert is saved and will send automatically the moment you have a connection."
+              : `Your college safety committee has been notified${locationStatus === 'active' ? ' with your live location' : ''}.`}
           </Text>
           <Text style={styles.successInstruction}>
-            Stay where you are if it's safe, or move to a crowded public area.
+            {queuedOffline
+              ? 'If you can, move to a place with signal or call for help directly.'
+              : "Stay where you are if it's safe, or move to a crowded public area."}
           </Text>
 
           <Pressable

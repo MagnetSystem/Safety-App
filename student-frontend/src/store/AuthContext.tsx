@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { useRouter, useSegments } from 'expo-router';
 import { getItem, setItem, deleteItem } from '../services/storage';
 import { setAuthFailureHandler } from '../services/api';
+import { flushSos } from '../services/pendingSos';
 import { login as loginRequest, registerStudent as registerRequest, getMe, RegisterStudentInput } from '../services/authService';
 
 interface SessionUser {
@@ -51,6 +52,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       router.replace('/(auth)/login');
     }
   }, [user, segments, isLoading]);
+
+  // Once signed in, deliver any emergency alerts that were queued offline.
+  useEffect(() => {
+    if (user) flushSos().catch(() => {});
+  }, [user?.id]);
 
   useEffect(() => {
     (async () => {

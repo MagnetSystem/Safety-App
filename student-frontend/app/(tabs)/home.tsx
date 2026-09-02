@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Animated, ScrollView, Easing, ActivityIndicator } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { FileText, UserX, Bell } from 'lucide-react-native';
+import { FileText, UserX, Bell, LifeBuoy } from 'lucide-react-native';
 import { Screen } from '../../src/components/PhoneFrame';
 import { Glass, StatusPill } from '../../src/components/ui-kit';
 import { colors, radius, spacing, typography, gradients } from '../../src/constants/theme';
@@ -10,6 +10,8 @@ import { useAuth } from '../../src/store/AuthContext';
 import { getReports } from '../../src/services/complaintsService';
 import { getMyProfile } from '../../src/services/studentsService';
 import { getNotifications } from '../../src/services/notificationsService';
+import { flushSos } from '../../src/services/pendingSos';
+import { tapFeedback } from '../../src/services/haptics';
 import { categoryLabel, type Report, type StudentProfile } from '../../src/types';
 
 function SOSButton() {
@@ -71,7 +73,13 @@ function SOSButton() {
       <Animated.View style={[StyleSheet.absoluteFill, styles.sosRing, { backgroundColor: '#e05c5c' }, ringStyle(wave1)]} />
       <Animated.View style={[StyleSheet.absoluteFill, styles.sosRing, { backgroundColor: '#e05c5c' }, ringStyle(wave2)]} />
 
-      <Pressable onPress={() => router.push('/report/emergency')} style={styles.sosBtnWrapper}>
+      <Pressable
+        onPress={() => {
+          tapFeedback();
+          router.push('/report/emergency');
+        }}
+        style={styles.sosBtnWrapper}
+      >
         <LinearGradient colors={gradients.coral} locations={gradients.coralLocations} style={styles.sosGradient}>
           <Text style={styles.sosTitle}>SOS</Text>
           <Text style={styles.sosSubtitle}>Emergency</Text>
@@ -90,6 +98,7 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(() => {
+    flushSos().catch(() => {});
     Promise.all([
       getMyProfile().catch(() => null),
       getReports({ pageSize: 3 }).catch(() => ({ items: [] as Report[] })),
@@ -135,6 +144,10 @@ export default function HomeScreen() {
 
         <View style={styles.heroSection}>
           <SOSButton />
+          <Pressable style={styles.helpLink} onPress={() => router.push('/help' as any)}>
+            <LifeBuoy size={14} strokeWidth={1.8} color={colors.indigoink} />
+            <Text style={styles.helpLinkText}>Helplines &amp; someone to talk to</Text>
+          </Pressable>
         </View>
 
         <View style={styles.actionGrid}>
@@ -251,8 +264,23 @@ const styles = StyleSheet.create({
   heroSection: {
     alignItems: 'center',
     marginTop: 18,
-    marginBottom: 64,
+    marginBottom: 48,
     zIndex: -1,
+  },
+  helpLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 24,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: 'rgba(91, 110, 232, 0.1)',
+  },
+  helpLinkText: {
+    ...typography.caption,
+    color: colors.indigoink,
+    fontFamily: 'Inter_500Medium',
   },
   sosContainer: {
     width: 176,

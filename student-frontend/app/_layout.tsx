@@ -44,6 +44,7 @@ export default function RootLayout() {
             <Stack.Screen name="report/new" />
             <Stack.Screen name="reports/[id]" />
             <Stack.Screen name="notifications" />
+            <Stack.Screen name="help" />
           </Stack>
         </PhoneFrame>
       </AuthProvider>
