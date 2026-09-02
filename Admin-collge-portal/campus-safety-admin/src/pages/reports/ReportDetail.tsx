@@ -4,7 +4,10 @@ import {
   ArrowLeft, Download, MessageSquare,
   MapPin, Clock, Loader2, FileImage, FileText
 } from "lucide-react";
-import { getReportById, updateReportStatus, getEvidence } from "../../services/complaintsService";
+import {
+  getReportById, updateReportStatus, getEvidence, getMessages, postMessage,
+  type ComplaintMessage,
+} from "../../services/complaintsService";
 import { formatEnum, type ComplaintStatus, type Evidence, type Report } from "../../types/report";
 import { useAuth } from "../../context/AuthContext";
 import jsPDF from "jspdf";
@@ -37,17 +40,38 @@ export default function ReportDetail() {
   const [note, setNote] = useState("");
   const [savingNote, setSavingNote] = useState(false);
 
+  // Student conversation
+  const [messages, setMessages] = useState<ComplaintMessage[]>([]);
+  const [draft, setDraft] = useState("");
+  const [sendingMsg, setSendingMsg] = useState(false);
+
   const load = () => {
     if (!id) return;
     setLoading(true);
-    Promise.all([getReportById(id), getEvidence(id)])
-      .then(([r, e]) => {
+    Promise.all([getReportById(id), getEvidence(id), getMessages(id).catch(() => [])])
+      .then(([r, e, m]) => {
         setReport(r);
         setStatusValue(r.status);
         setEvidence(e);
+        setMessages(m);
       })
       .catch(() => setError("Could not load this report."))
       .finally(() => setLoading(false));
+  };
+
+  const handleSendMessage = async () => {
+    const body = draft.trim();
+    if (!id || !body || sendingMsg) return;
+    setSendingMsg(true);
+    try {
+      const msg = await postMessage(id, body);
+      setMessages((prev) => [...prev, msg]);
+      setDraft("");
+    } catch {
+      setError("Could not send the message.");
+    } finally {
+      setSendingMsg(false);
+    }
   };
 
   useEffect(load, [id]);
@@ -269,6 +293,65 @@ export default function ReportDetail() {
                     <span className="truncate w-full">{e.fileName}</span>
                   </a>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* Conversation with student */}
+          <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl p-5">
+            <h3 className="font-medium mb-1 flex items-center gap-2">
+              <MessageSquare size={18} className="text-primary" />
+              Conversation with {report.type === "ANONYMOUS" ? "reporter" : "student"}
+            </h3>
+            <p className="text-xs text-muted-foreground mb-4">
+              These messages are visible to the person who filed the report. Use this to ask for
+              more information. For private notes, use “Add Internal Note” in the sidebar.
+            </p>
+
+            {messages.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No messages yet.</p>
+            ) : (
+              <div className="space-y-3 mb-4">
+                {messages.map((m) => {
+                  const fromStudent = m.authorRole === "STUDENT";
+                  return (
+                    <div
+                      key={m.id}
+                      className={`max-w-[85%] rounded-xl px-3.5 py-2.5 text-sm ${
+                        fromStudent
+                          ? "bg-muted/60 mr-auto"
+                          : "bg-primary/10 ml-auto"
+                      }`}
+                    >
+                      <p className="text-[11px] font-medium text-muted-foreground mb-0.5">
+                        {fromStudent ? "Student" : "Committee"}
+                      </p>
+                      <p className="text-foreground whitespace-pre-wrap leading-relaxed">{m.body}</p>
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        {new Date(m.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {canManage && (
+              <div className="flex gap-2">
+                <textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  rows={2}
+                  placeholder="Message the student…"
+                  className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+                />
+                <button
+                  onClick={handleSendMessage}
+                  disabled={sendingMsg || !draft.trim()}
+                  className="px-4 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 disabled:opacity-50 transition"
+                >
+                  {sendingMsg ? "…" : "Send"}
+                </button>
               </div>
             )}
           </div>

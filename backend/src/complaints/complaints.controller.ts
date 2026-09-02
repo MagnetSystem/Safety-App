@@ -9,6 +9,7 @@ import { CreateComplaintDto } from './dto/create-complaint.dto';
 import { UpdateComplaintStatusDto } from './dto/update-complaint-status.dto';
 import { AssignCommitteeDto } from './dto/assign-committee.dto';
 import { QueryComplaintsDto } from './dto/query-complaints.dto';
+import { CreateMessageDto } from './dto/create-message.dto';
 
 @Controller('complaints')
 export class ComplaintsController {
@@ -34,6 +35,21 @@ export class ComplaintsController {
   @Get(':id/timeline')
   getTimeline(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.complaintsService.getTimeline(user, id);
+  }
+
+  @Get(':id/messages')
+  listMessages(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.complaintsService.listMessages(user, id);
+  }
+
+  @Post(':id/messages')
+  @Audit({ action: 'COMPLAINT_MESSAGE_ADDED', entityType: 'Complaint' })
+  addMessage(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateMessageDto,
+  ) {
+    return this.complaintsService.addMessage(user, id, dto);
   }
 
   @Patch(':id/status')

@@ -20,6 +20,7 @@ model User {
   auditLogs          AuditLog[]
   collegeAdmin       CollegeAdmin?
   uploadedEvidence   ComplaintEvidence[]
+  complaintMessages  ComplaintMessage[]
   complaintTimelines ComplaintTimeline[]
   notifications      Notification[]
   student            Student?
@@ -131,6 +132,7 @@ model Complaint {
   updatedAt                DateTime            @updatedAt
   resolutionReport         String?
   evidence                 ComplaintEvidence[]
+  messages                 ComplaintMessage[]
   timeline                 ComplaintTimeline[]
   college                  College             @relation(fields: [collegeId], references: [id])
   student                  Student?            @relation(fields: [studentId], references: [id])
@@ -157,6 +159,23 @@ model ComplaintEvidence {
 
   @@index([complaintId])
   @@map("complaint_evidence")
+}
+
+/// Two-way messages between the reporting student and the committee.
+/// Used mainly to resolve MORE_INFO_REQUESTED, and for the student's
+/// "I'm safe now" follow-up on an emergency.
+model ComplaintMessage {
+  id          String    @id @default(uuid())
+  complaintId String
+  authorId    String?
+  authorRole  UserRole
+  body        String
+  createdAt   DateTime  @default(now())
+  author      User?     @relation(fields: [authorId], references: [id])
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@index([complaintId, createdAt])
+  @@map("complaint_messages")
 }
 
 /// Step-by-step history of a complaint's workflow.
@@ -271,6 +290,7 @@ enum NotificationType {
   NEW_EMERGENCY_REPORT
   NEW_COMPLAINT
   NEW_EVIDENCE_UPLOADED
+  NEW_MESSAGE
   STATUS_CHANGED
   GENERIC
 }

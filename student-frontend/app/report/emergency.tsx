@@ -10,7 +10,7 @@ import { colors, radius, spacing, typography, gradients } from '../../src/consta
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../src/store/AuthContext';
 import { getMyProfile } from '../../src/services/studentsService';
-import { createComplaint } from '../../src/services/complaintsService';
+import { createComplaint, postMessage } from '../../src/services/complaintsService';
 import { queueSos } from '../../src/services/pendingSos';
 import { heavyFeedback, successFeedback, warningFeedback } from '../../src/services/haptics';
 import { CATEGORY_OPTIONS, categoryLabel, type IncidentCategoryEnum } from '../../src/types';
@@ -26,6 +26,8 @@ export default function EmergencyScreen() {
   const [category, setCategory] = useState<IncidentCategoryEnum>(CATEGORY_OPTIONS[0]);
   const [submitted, setSubmitted] = useState(false);
   const [queuedOffline, setQueuedOffline] = useState(false);
+  const [complaintId, setComplaintId] = useState<string | null>(null);
+  const [safeMarked, setSafeMarked] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [locationStatus, setLocationStatus] = useState<'idle' | 'active' | 'denied'>('idle');
@@ -73,7 +75,8 @@ export default function EmergencyScreen() {
     };
 
     try {
-      await createComplaint(payload);
+      const created = await createComplaint(payload);
+      setComplaintId(created.id);
       successFeedback();
       setSubmitted(true);
     } catch (err: any) {
@@ -107,6 +110,26 @@ export default function EmergencyScreen() {
               ? 'If you can, move to a place with signal or call for help directly.'
               : "Stay where you are if it's safe, or move to a crowded public area."}
           </Text>
+
+          {!queuedOffline && complaintId && (
+            <Pressable
+              style={[styles.safeBtn, safeMarked && styles.safeBtnDone]}
+              disabled={safeMarked}
+              onPress={async () => {
+                setSafeMarked(true);
+                successFeedback();
+                try {
+                  await postMessage(complaintId, "I'm safe now.");
+                } catch {
+                  setSafeMarked(false);
+                }
+              }}
+            >
+              <Text style={styles.safeText}>
+                {safeMarked ? "The committee has been told you're safe" : "I'm safe now"}
+              </Text>
+            </Pressable>
+          )}
 
           <Pressable
             style={styles.doneBtn}
@@ -242,8 +265,26 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginTop: spacing.lg,
   },
+  safeBtn: {
+    marginTop: 40,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 16,
+    width: '100%',
+    alignItems: 'center',
+  },
+  safeBtnDone: {
+    opacity: 0.7,
+  },
+  safeText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 15,
+    color: '#FFFFFF',
+  },
   doneBtn: {
-    marginTop: 48,
+    marginTop: spacing.md,
     backgroundColor: '#FFFFFF',
     paddingVertical: 16,
     paddingHorizontal: 24,

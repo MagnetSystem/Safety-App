@@ -8,6 +8,7 @@ import { CreateComplaintDto } from './dto/create-complaint.dto';
 import { UpdateComplaintStatusDto } from './dto/update-complaint-status.dto';
 import { AssignCommitteeDto } from './dto/assign-committee.dto';
 import { QueryComplaintsDto } from './dto/query-complaints.dto';
+import { CreateMessageDto } from './dto/create-message.dto';
 import { Paginated } from '../common/dto/pagination.dto';
 import { maskAnonymousComplaint } from './complaints.util';
 
@@ -234,6 +235,71 @@ export class ComplaintsService {
     });
 
     return maskAnonymousComplaint(updated);
+  }
+
+  async listMessages(user: AuthenticatedUser, id: string) {
+    const complaint = await this.prisma.complaint.findUnique({
+      where: { id },
+      select: { collegeId: true, studentId: true },
+    });
+    if (!complaint) throw new NotFoundException('Complaint not found');
+    await this.assertAccess(user, complaint);
+
+    return this.prisma.complaintMessage.findMany({
+      where: { complaintId: id },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, body: true, authorRole: true, authorId: true, createdAt: true },
+    });
+  }
+
+  async addMessage(user: AuthenticatedUser, id: string, dto: CreateMessageDto) {
+    const complaint = await this.prisma.complaint.findUnique({
+      where: { id },
+      select: {
+        collegeId: true,
+        studentId: true,
+        code: true,
+        student: { select: { userId: true } },
+      },
+    });
+    if (!complaint) throw new NotFoundException('Complaint not found');
+    await this.assertAccess(user, complaint);
+
+    const message = await this.prisma.complaintMessage.create({
+      data: {
+        complaintId: id,
+        authorId: user.id,
+        authorRole: user.role,
+        body: dto.body,
+      },
+      select: { id: true, body: true, authorRole: true, authorId: true, createdAt: true },
+    });
+
+    if (user.role === 'STUDENT') {
+      const admins = await this.prisma.collegeAdmin.findMany({
+        where: { collegeId: complaint.collegeId },
+        select: { userId: true },
+      });
+      await this.notifications.createMany(
+        admins.map((admin) => ({
+          userId: admin.userId,
+          type: 'NEW_MESSAGE' as const,
+          title: 'New reply from student',
+          body: `${complaint.code}: ${dto.body.slice(0, 80)}`,
+          data: { complaintId: id },
+        })),
+      );
+    } else if (complaint.student?.userId) {
+      await this.notifications.create({
+        userId: complaint.student.userId,
+        type: 'NEW_MESSAGE',
+        title: 'Message from the committee',
+        body: `${complaint.code}: ${dto.body.slice(0, 80)}`,
+        data: { complaintId: id },
+      });
+    }
+
+    return message;
   }
 
   /** Used by the Evidence module to enforce the same access rules on a complaint. */

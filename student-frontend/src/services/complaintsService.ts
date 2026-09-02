@@ -41,3 +41,21 @@ export const createComplaint = async (input: CreateComplaintInput) => {
   const { data } = await api.post<Report>('/complaints', input);
   return data;
 };
+
+export interface ComplaintMessage {
+  id: string;
+  body: string;
+  authorRole: 'STUDENT' | 'COLLEGE_ADMIN' | 'SUPER_ADMIN';
+  authorId: string | null;
+  createdAt: string;
+}
+
+export const getMessages = async (complaintId: string) => {
+  const { data } = await api.get<ComplaintMessage[]>(`/complaints/${complaintId}/messages`);
+  return data;
+};
+
+export const postMessage = async (complaintId: string, body: string) => {
+  const { data } = await api.post<ComplaintMessage>(`/complaints/${complaintId}/messages`, { body });
+  return data;
+};
