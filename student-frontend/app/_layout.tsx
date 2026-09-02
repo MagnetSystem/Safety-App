@@ -6,6 +6,7 @@ import { usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { AuthProvider } from '../src/store/AuthContext';
+import { ErrorBoundary } from '../src/components/ErrorBoundary';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -30,20 +31,22 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthProvider>
-      <StatusBar style={isEmergency ? "light" : "dark"} />
-      <PhoneFrame isEmergency={isEmergency}>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="(auth)/login" />
-          <Stack.Screen name="(auth)/register" />
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="report/emergency" options={{ presentation: 'fullScreenModal' }} />
-          <Stack.Screen name="report/new" />
-          <Stack.Screen name="reports/[id]" />
-          <Stack.Screen name="notifications" />
-        </Stack>
-      </PhoneFrame>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <StatusBar style={isEmergency ? "light" : "dark"} />
+        <PhoneFrame isEmergency={isEmergency}>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="(auth)/login" />
+            <Stack.Screen name="(auth)/register" />
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="report/emergency" options={{ presentation: 'fullScreenModal' }} />
+            <Stack.Screen name="report/new" />
+            <Stack.Screen name="reports/[id]" />
+            <Stack.Screen name="notifications" />
+          </Stack>
+        </PhoneFrame>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

@@ -37,8 +37,26 @@ export class NotificationsService {
     return notification;
   }
 
+  /**
+   * Fan-out helper (e.g. notifying every college admin about a new report).
+   * Uses a single INSERT instead of N round-trips. Returns nothing — callers
+   * that need the rows should use create() per-user.
+   */
   async createMany(inputs: CreateNotificationInput[]) {
-    return Promise.all(inputs.map((input) => this.create(input)));
+    if (inputs.length === 0) return { count: 0 };
+    const now = new Date();
+    const result = await this.prisma.notification.createMany({
+      data: inputs.map((input) => ({
+        userId: input.userId,
+        type: input.type,
+        title: input.title,
+        body: input.body,
+        data: (input.data as Prisma.InputJsonValue) ?? Prisma.JsonNull,
+        sentAt: now,
+      })),
+    });
+    this.logger.debug(`Queued ${result.count} notifications`);
+    return result;
   }
 
   async findForUser(userId: string, query: QueryNotificationsDto): Promise<Paginated<unknown>> {

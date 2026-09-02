@@ -160,7 +160,10 @@ export class ComplaintsService {
   }
 
   async updateStatus(user: AuthenticatedUser, id: string, dto: UpdateComplaintStatusDto) {
-    const complaint = await this.prisma.complaint.findUnique({ where: { id } });
+    const complaint = await this.prisma.complaint.findUnique({
+      where: { id },
+      select: { collegeId: true, student: { select: { userId: true } } },
+    });
     if (!complaint) throw new NotFoundException('Complaint not found');
     if (complaint.collegeId !== user.collegeId) {
       throw new ForbiddenException('This complaint belongs to a different college');
@@ -178,9 +181,8 @@ export class ComplaintsService {
       include: DETAIL_INCLUDE,
     });
 
-    if (updated.studentId) {
-      const student = await this.prisma.student.findUnique({ where: { id: updated.studentId } });
-      if (student) await this.notifyStatusChange(student.userId, updated);
+    if (complaint.student?.userId) {
+      await this.notifyStatusChange(complaint.student.userId, updated);
     }
 
     return maskAnonymousComplaint(updated);

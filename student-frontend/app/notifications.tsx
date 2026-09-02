@@ -1,9 +1,9 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, RefreshControl, ActivityIndicator } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { View, Text, StyleSheet, Pressable, FlatList, RefreshControl, ActivityIndicator } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Screen } from '../src/components/PhoneFrame';
 import { Glass, ScreenHeader } from '../src/components/ui-kit';
-import { colors, radius, spacing, typography } from '../src/constants/theme';
+import { colors, spacing, typography } from '../src/constants/theme';
 import {
   getNotifications,
   markNotificationRead,
@@ -12,6 +12,7 @@ import {
 } from '../src/services/notificationsService';
 
 export default function NotificationsScreen() {
+  const router = useRouter();
   const [items, setItems] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -34,13 +35,16 @@ export default function NotificationsScreen() {
   );
 
   const handlePress = async (notification: AppNotification) => {
-    if (notification.isRead) return;
-    setItems((prev) => prev.map((n) => (n.id === notification.id ? { ...n, isRead: true } : n)));
-    try {
-      await markNotificationRead(notification.id);
-    } catch {
-      // best-effort — a manual refresh will resync
+    if (!notification.isRead) {
+      setItems((prev) => prev.map((n) => (n.id === notification.id ? { ...n, isRead: true } : n)));
+      try {
+        await markNotificationRead(notification.id);
+      } catch {
+        // best-effort — a manual refresh will resync
+      }
     }
+    const complaintId = notification.data?.complaintId as string | undefined;
+    if (complaintId) router.push(`/reports/${complaintId}`);
   };
 
   const handleMarkAllRead = async () => {
@@ -56,48 +60,52 @@ export default function NotificationsScreen() {
 
   return (
     <Screen padded>
-      <ScrollView
+      <FlatList
+        data={loading ? [] : items}
+        keyExtractor={(n) => n.id}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={styles.listContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={colors.indigoink} />}
-      >
-        <ScreenHeader title="Notifications" subtitle="Updates on your reports" back="/(tabs)/home" />
-
-        {hasUnread && (
-          <Pressable onPress={handleMarkAllRead}>
-            <Text style={styles.markAll}>Mark all as read</Text>
+        ListHeaderComponent={
+          <>
+            <ScreenHeader title="Notifications" subtitle="Updates on your reports" back="/(tabs)/home" />
+            {hasUnread && (
+              <Pressable onPress={handleMarkAllRead}>
+                <Text style={styles.markAll}>Mark all as read</Text>
+              </Pressable>
+            )}
+          </>
+        }
+        ListEmptyComponent={
+          loading ? (
+            <ActivityIndicator color={colors.indigoink} style={styles.loading} />
+          ) : (
+            <Glass style={styles.emptyCard}>
+              <Text style={styles.emptyText}>
+                Nothing yet. You will see updates here when your reports change status.
+              </Text>
+            </Glass>
+          )
+        }
+        renderItem={({ item: n }) => (
+          <Pressable onPress={() => handlePress(n)} style={styles.cardWrap}>
+            <Glass style={n.isRead ? styles.card : [styles.card, styles.cardUnread]}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardTitle}>{n.title}</Text>
+                {!n.isRead && <View style={styles.unreadDot} />}
+              </View>
+              <Text style={styles.cardBody}>{n.body}</Text>
+              <Text style={styles.cardDate}>{new Date(n.createdAt).toLocaleString()}</Text>
+            </Glass>
           </Pressable>
         )}
-
-        {loading ? (
-          <ActivityIndicator color={colors.indigoink} style={styles.loading} />
-        ) : items.length === 0 ? (
-          <Glass style={styles.emptyCard}>
-            <Text style={styles.emptyText}>Nothing yet. You will see updates here when your reports change status.</Text>
-          </Glass>
-        ) : (
-          <View style={styles.list}>
-            {items.map((n) => (
-              <Pressable key={n.id} onPress={() => handlePress(n)}>
-                <Glass style={n.isRead ? styles.card : [styles.card, styles.cardUnread]}>
-                  <View style={styles.cardHeader}>
-                    <Text style={styles.cardTitle}>{n.title}</Text>
-                    {!n.isRead && <View style={styles.unreadDot} />}
-                  </View>
-                  <Text style={styles.cardBody}>{n.body}</Text>
-                  <Text style={styles.cardDate}>{new Date(n.createdAt).toLocaleString()}</Text>
-                </Glass>
-              </Pressable>
-            ))}
-          </View>
-        )}
-      </ScrollView>
+      />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollContent: {
+  listContent: {
     paddingBottom: spacing.xxl,
   },
   markAll: {
@@ -118,8 +126,8 @@ const styles = StyleSheet.create({
     color: colors.mutedink,
     lineHeight: 20,
   },
-  list: {
-    gap: spacing.md,
+  cardWrap: {
+    marginBottom: spacing.md,
   },
   card: {
     padding: spacing.lg,

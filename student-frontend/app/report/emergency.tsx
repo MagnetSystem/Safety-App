@@ -11,12 +11,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../src/store/AuthContext';
 import { getMyProfile } from '../../src/services/studentsService';
 import { createComplaint } from '../../src/services/complaintsService';
-import { CATEGORY_OPTIONS } from '../../src/types';
+import { CATEGORY_OPTIONS, categoryLabel, type IncidentCategoryEnum } from '../../src/types';
 
 export default function EmergencyScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const [note, setNote] = useState('');
+  const [category, setCategory] = useState<IncidentCategoryEnum>(CATEGORY_OPTIONS[0]);
   const [submitted, setSubmitted] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +57,7 @@ export default function EmergencyScreen() {
     try {
       await createComplaint({
         type: 'EMERGENCY',
-        category: CATEGORY_OPTIONS[0],
+        category,
         description: note.trim() || 'Emergency SOS alert — no additional details provided.',
         gpsLat: gps.gpsLat,
         gpsLng: gps.gpsLng,
@@ -121,6 +122,26 @@ export default function EmergencyScreen() {
             <Row label="Location" value="Requested when you send" valueHighlight />
             <View style={styles.divider} />
             <Row label="Device info" value={`${Device.modelName ?? Platform.OS} (${Device.osName ?? Platform.OS} ${Device.osVersion ?? Platform.Version})`} />
+          </View>
+        </View>
+
+        <View style={styles.categoryContainer}>
+          <Text style={styles.categoryLabel}>What is happening? (optional)</Text>
+          <View style={styles.chipsContainer}>
+            {CATEGORY_OPTIONS.map((c) => {
+              const active = c === category;
+              return (
+                <Pressable
+                  key={c}
+                  onPress={() => setCategory(c)}
+                  style={[styles.chip, active ? styles.chipActive : styles.chipInactive]}
+                >
+                  <Text style={[styles.chipText, active ? styles.chipTextActive : styles.chipTextInactive]}>
+                    {categoryLabel(c)}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
         </View>
 
@@ -299,6 +320,41 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.5)',
+  },
+  categoryContainer: {
+    marginBottom: spacing.lg,
+  },
+  categoryLabel: {
+    ...typography.body,
+    fontSize: 14,
+    color: colors.subink,
+    marginBottom: spacing.sm,
+  },
+  chipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
+  },
+  chipActive: {
+    backgroundColor: '#FFFFFF',
+  },
+  chipInactive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+  },
+  chipText: {
+    ...typography.caption,
+  },
+  chipTextActive: {
+    color: '#E0605C',
+    fontFamily: 'Inter_500Medium',
+  },
+  chipTextInactive: {
+    color: colors.subink,
   },
   noteContainer: {
     marginBottom: spacing.xl,
