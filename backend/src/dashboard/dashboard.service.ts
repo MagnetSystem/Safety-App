@@ -63,15 +63,15 @@ export class DashboardService {
           FROM "incidents" WHERE "organizationId" = ${organizationId}
           ${assignedSql}
           GROUP BY month ORDER BY month DESC LIMIT 12`,
-        this.prisma.incident.groupBy({ by: ['departmentId'], where: { organizationId }, _count: true }),
+        this.prisma.$queryRaw<{ id: string | null; name: string | null; count: bigint }[]>`
+          SELECT d.id, d.name, COUNT(i.id)::bigint as count
+          FROM "incidents" i
+          LEFT JOIN "departments" d ON d.id = i."departmentId"
+          WHERE i."organizationId" = ${organizationId}
+          GROUP BY d.id, d.name`,
       ]);
 
       const totals = counts[0] ?? { today: 0n, emergency: 0n, pending: 0n, investigating: 0n, resolved: 0n };
-      const deptIds = byDepartment.map((d) => d.departmentId).filter((id): id is string => !!id);
-      const deptRows = deptIds.length
-        ? await this.prisma.department.findMany({ where: { id: { in: deptIds } }, select: { id: true, name: true } })
-        : [];
-      const deptName = new Map(deptRows.map((d) => [d.id, d.name]));
 
       return {
         todayReports: Number(totals.today),
@@ -82,8 +82,8 @@ export class DashboardService {
         byCategory: byCategory.map((c) => ({ category: c.category, count: c._count })),
         byMonth: byMonth.map((m) => ({ month: m.month, count: Number(m.count) })),
         byDepartment: byDepartment.map((d) => ({
-          department: d.departmentId ? deptName.get(d.departmentId) ?? 'Unassigned' : 'Unassigned',
-          count: d._count,
+          department: d.name ?? 'Unassigned',
+          count: Number(d.count),
         })),
       };
     });

@@ -28,7 +28,6 @@ const LIST_INCLUDE = {
   organization: { select: { id: true, name: true, code: true } },
   assignedTo: { select: { id: true, email: true } },
   department: { select: { id: true, name: true, slug: true } },
-  _count: { select: { evidence: true } },
 } satisfies Prisma.IncidentInclude;
 
 @Injectable()
