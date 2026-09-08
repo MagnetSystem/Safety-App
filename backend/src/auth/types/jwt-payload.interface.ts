@@ -7,6 +7,8 @@ export interface JwtPayload {
   organizationId: string | null;
   /** @deprecated alias of organizationId for older clients */
   collegeId: string | null;
+  memberId?: string | null;
+  orgStaffId?: string | null;
 }
 
 export interface AuthenticatedUser {
@@ -16,4 +18,6 @@ export interface AuthenticatedUser {
   organizationId: string | null;
   /** @deprecated alias of organizationId */
   collegeId: string | null;
+  memberId?: string | null;
+  orgStaffId?: string | null;
 }

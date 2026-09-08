@@ -347,12 +347,29 @@ export class AuthService {
     role: JwtPayload['role'],
     organizationId: string | null,
   ) {
+    let memberId: string | null = null;
+    let orgStaffId: string | null = null;
+
+    if (role === UserRole.MEMBER) {
+      const member = await this.prisma.bypassRls(() =>
+        this.prisma.member.findUnique({ where: { userId }, select: { id: true } }),
+      );
+      memberId = member?.id ?? null;
+    } else if (role === UserRole.STAFF || role === UserRole.ADMIN || role === UserRole.OWNER) {
+      const staff = await this.prisma.bypassRls(() =>
+        this.prisma.orgStaff.findUnique({ where: { userId }, select: { id: true } }),
+      );
+      orgStaffId = staff?.id ?? null;
+    }
+
     const payload: JwtPayload = {
       sub: userId,
       email,
       role,
       organizationId,
       collegeId: organizationId,
+      memberId,
+      orgStaffId,
     };
 
     const accessToken = await this.jwtService.signAsync(payload, {
@@ -367,7 +384,7 @@ export class AuthService {
     return {
       accessToken,
       refreshToken,
-      user: { id: userId, email, role, organizationId, collegeId: organizationId },
+      user: { id: userId, email, role, organizationId, collegeId: organizationId, memberId, orgStaffId },
     };
   }
 }

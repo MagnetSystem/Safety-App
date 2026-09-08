@@ -237,6 +237,7 @@ model Incident {
 
   @@index([organizationId, status])
   @@index([organizationId, createdAt])
+  @@index([organizationId, status, createdAt(sort: Desc)])
   @@index([organizationId, departmentId, status])
   @@index([memberId])
   @@index([assignedToUserId])

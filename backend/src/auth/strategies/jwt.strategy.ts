@@ -26,7 +26,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     const organizationId = payload.organizationId ?? payload.collegeId ?? null;
     const cacheKey = `${payload.sub}:${organizationId ?? ''}`;
     const cached = this.sessionCache.get(cacheKey);
-    if (cached && cached.expiresAt > Date.now()) return cached.user;
+    if (cached && cached.expiresAt > Date.now()) {
+      return {
+        ...cached.user,
+        memberId: payload.memberId ?? null,
+        orgStaffId: payload.orgStaffId ?? null,
+      };
+    }
 
     const row = await this.prisma.bypassRls(() =>
       this.prisma.user.findUnique({
@@ -70,6 +76,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       role: row.role,
       organizationId,
       collegeId: organizationId,
+      memberId: payload.memberId ?? null,
+      orgStaffId: payload.orgStaffId ?? null,
     };
     this.sessionCache.set(cacheKey, { user, expiresAt: Date.now() + SESSION_TTL_MS });
     if (this.sessionCache.size > 2_000) {

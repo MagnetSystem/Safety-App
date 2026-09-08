@@ -173,9 +173,13 @@ export class IncidentsService {
     const where: Prisma.IncidentWhereInput = {};
 
     if (user.role === UserRole.MEMBER) {
-      const member = await this.prisma.member.findUnique({ where: { userId: user.id } });
-      if (!member) throw new NotFoundException('Member profile not found');
-      where.memberId = member.id;
+      let memberId = user.memberId ?? null;
+      if (!memberId) {
+        const member = await this.prisma.member.findUnique({ where: { userId: user.id } });
+        if (!member) throw new NotFoundException('Member profile not found');
+        memberId = member.id;
+      }
+      where.memberId = memberId;
     } else if (user.role === UserRole.GUARDIAN) {
       const links = await this.prisma.guardianLink.findMany({
         where: { guardianUserId: user.id, status: 'ACTIVE' },
@@ -459,8 +463,13 @@ export class IncidentsService {
       return;
     }
 
-    const member = await this.prisma.member.findUnique({ where: { userId: user.id } });
-    if (!member || incident.memberId !== member.id) {
+    let memberId = user.memberId ?? null;
+    if (!memberId) {
+      const member = await this.prisma.member.findUnique({ where: { userId: user.id } });
+      if (!member) throw new NotFoundException('Member profile not found');
+      memberId = member.id;
+    }
+    if (incident.memberId !== memberId) {
       throw new ForbiddenException('You do not have access to this incident');
     }
   }
