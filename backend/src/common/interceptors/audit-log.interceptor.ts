@@ -23,7 +23,7 @@ export class AuditLogInterceptor implements NestInterceptor {
     if (!meta) return next.handle();
 
     const request = context.switchToHttp().getRequest();
-    const user = request.user as { id: string; collegeId: string | null } | undefined;
+    const user = request.user as { id: string; organizationId?: string | null; collegeId?: string | null } | undefined;
 
     return next.handle().pipe(
       tap((result) => {
@@ -33,7 +33,7 @@ export class AuditLogInterceptor implements NestInterceptor {
         this.auditLogsService
           .record({
             actorId: user?.id ?? null,
-            collegeId: user?.collegeId ?? null,
+            organizationId: user?.organizationId ?? user?.collegeId ?? null,
             action: meta.action,
             entityType: meta.entityType,
             entityId,

@@ -1,54 +1,82 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Switch } from 'react-native';
 import { useRouter } from 'expo-router';
 import { GlassInput, ScreenHeader } from '../../src/components/ui-kit';
 import { Screen } from '../../src/components/PhoneFrame';
 import { colors, radius, spacing, typography, shadows } from '../../src/constants/theme';
-import { updateMyProfile } from '../../src/services/studentsService';
-import { ChevronRight, Check } from 'lucide-react-native';
+import { getMyProfile, updateMyProfile } from '../../src/services/studentsService';
+import { Check } from 'lucide-react-native';
+import type { ProfileFieldDef } from '../../src/types';
+
+const COLUMN_KEYS = new Set([
+  'name', 'mobile', 'dateOfBirth', 'gender', 'memberNumber', 'studentNumber',
+  'department', 'course', 'semester', 'year', 'section', 'isHosteler',
+  'hostelAddress', 'hostelRoomNumber', 'permanentAddress',
+  'emergencyContactName', 'emergencyContactPhone', 'bloodGroup',
+  'medicalConditions', 'allergies', 'disability',
+]);
+
+const FALLBACK_FIELDS: ProfileFieldDef[] = [
+  { key: 'mobile', label: 'Mobile number', type: 'tel', group: 'identity', required: true },
+  { key: 'emergencyContactName', label: 'Emergency contact name', type: 'text', group: 'emergency', required: true },
+  { key: 'emergencyContactPhone', label: 'Emergency contact phone', type: 'tel', group: 'emergency', required: true },
+];
 
 export default function CompleteProfileScreen() {
   const router = useRouter();
-
-  // Form State
-  const [mobile, setMobile] = useState('');
-  const [studentNumber, setStudentNumber] = useState('');
-  const [department, setDepartment] = useState('');
-  const [semester, setSemester] = useState('');
-  const [year, setYear] = useState('');
-  const [isHosteler, setIsHosteler] = useState(false);
-  const [bloodGroup, setBloodGroup] = useState('');
-  const [emergencyContactName, setEmergencyContactName] = useState('');
-  const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
-
+  const [fields, setFields] = useState<ProfileFieldDef[]>(FALLBACK_FIELDS);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [orgLabel, setOrgLabel] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const canSubmit = 
-    mobile.trim().length >= 10 &&
-    studentNumber.trim().length > 0 &&
-    department.trim().length > 0 &&
-    emergencyContactName.trim().length > 0 &&
-    emergencyContactPhone.trim().length >= 10 &&
-    !submitting;
+  useEffect(() => {
+    getMyProfile()
+      .then((p) => {
+        const defs =
+          p.organization?.organizationType?.memberFields ??
+          p.organization?.settings?.profileFieldDefs ??
+          FALLBACK_FIELDS;
+        const usable = defs.filter((f) => f.key !== 'name');
+        setFields(usable.length ? usable : FALLBACK_FIELDS);
+        setOrgLabel(p.organization?.organizationType?.label ?? p.organization?.name ?? null);
+        const next: Record<string, string> = {};
+        for (const f of usable) {
+          const fromColumn = (p as Record<string, unknown>)[f.key];
+          const fromProfile = p.profile?.[f.key];
+          const raw = fromColumn ?? fromProfile ?? '';
+          next[f.key] = raw === true ? 'true' : raw === false ? 'false' : String(raw ?? '');
+        }
+        setValues(next);
+      })
+      .catch(() => undefined)
+      .finally(() => setLoading(false));
+  }, []);
+
+  const setValue = (key: string, value: string) => setValues((prev) => ({ ...prev, [key]: value }));
+
+  const canSubmit = useMemo(() => {
+    return fields.every((f) => !f.required || (values[f.key] ?? '').toString().trim().length > 0);
+  }, [fields, values]);
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
     setError(null);
     setSubmitting(true);
-    
     try {
-      await updateMyProfile({
-        mobile: mobile.trim(),
-        studentNumber: studentNumber.trim(),
-        department: department.trim(),
-        semester: semester.trim(),
-        year: year ? parseInt(year.trim(), 10) : undefined,
-        isHosteler,
-        bloodGroup: bloodGroup.trim(),
-        emergencyContactName: emergencyContactName.trim(),
-        emergencyContactPhone: emergencyContactPhone.trim(),
-      });
+      const columnPatch: Record<string, unknown> = {};
+      const profile: Record<string, unknown> = {};
+      for (const f of fields) {
+        const raw = (values[f.key] ?? '').trim();
+        let parsed: unknown = raw;
+        if (f.type === 'number') parsed = raw ? Number(raw) : undefined;
+        if (f.type === 'boolean') parsed = raw === 'true' || raw === '1';
+        if (f.key === 'memberNumber') columnPatch.studentNumber = raw;
+        if (COLUMN_KEYS.has(f.key)) columnPatch[f.key] = parsed;
+        else profile[f.key] = parsed;
+      }
+      await updateMyProfile({ ...columnPatch, profile } as any);
       router.replace('/(tabs)/home');
     } catch (err: any) {
       setError(err.response?.data?.message || err.message || 'Could not save your profile details.');
@@ -57,109 +85,49 @@ export default function CompleteProfileScreen() {
     }
   };
 
+  const grouped = fields.reduce<Record<string, ProfileFieldDef[]>>((acc, f) => {
+    (acc[f.group] ??= []).push(f);
+    return acc;
+  }, {});
+
+  if (loading) {
+    return (
+      <Screen padded>
+        <ActivityIndicator color={colors.indigoink} style={{ marginTop: 40 }} />
+      </Screen>
+    );
+  }
+
   return (
     <Screen padded>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <ScreenHeader
-          title="Complete Profile"
-          subtitle="We need a few more details to keep you safe on campus."
+          title="Complete profile"
+          subtitle={orgLabel ? `Fields for ${orgLabel}. Medical details are only used in emergencies.` : 'Only what responders need if you trigger SOS.'}
         />
 
         <View style={styles.form}>
-          <Text style={styles.sectionTitle}>Contact & Academic Info</Text>
-          
-          <GlassInput
-            label="Mobile Phone Number *"
-            placeholder="+91 90000 00000"
-            value={mobile}
-            onChangeText={setMobile}
-            keyboardType="phone-pad"
-          />
-          
-          <GlassInput
-            label="Registration / Roll Number *"
-            placeholder="SIT/CSE/2029/0147"
-            value={studentNumber}
-            onChangeText={setStudentNumber}
-          />
-          
-          <GlassInput
-            label="Department / Course *"
-            placeholder="e.g. Computer Science"
-            value={department}
-            onChangeText={setDepartment}
-          />
-          
-          <GlassInput
-            label="Semester (Optional)"
-            placeholder="e.g. 5"
-            value={semester}
-            onChangeText={setSemester}
-          />
-
-          <GlassInput
-            label="Year of Study (Optional)"
-            placeholder="e.g. 3"
-            value={year}
-            onChangeText={setYear}
-            keyboardType="number-pad"
-          />
-
-          <View style={{ marginTop: spacing.sm }}>
-            <Text style={styles.label}>Residence Type</Text>
-            <View style={styles.radioGroup}>
-              <Pressable 
-                style={[styles.radioOption, !isHosteler && styles.radioOptionActive]}
-                onPress={() => setIsHosteler(false)}
-              >
-                <Text style={[styles.radioText, !isHosteler && styles.radioTextActive]}>Day Scholar</Text>
-              </Pressable>
-              <Pressable 
-                style={[styles.radioOption, isHosteler && styles.radioOptionActive]}
-                onPress={() => setIsHosteler(true)}
-              >
-                <Text style={[styles.radioText, isHosteler && styles.radioTextActive]}>Hosteler</Text>
-              </Pressable>
+          {Object.entries(grouped).map(([group, groupFields]) => (
+            <View key={group} style={{ gap: spacing.md }}>
+              <Text style={styles.sectionTitle}>{group.replace(/_/g, ' ')}</Text>
+              {groupFields.map((f) => (
+                <FieldInput key={f.key} field={f} value={values[f.key] ?? ''} onChange={(v) => setValue(f.key, v)} />
+              ))}
             </View>
-          </View>
-
-          <View style={styles.divider} />
-          <Text style={styles.sectionTitle}>Emergency Information</Text>
-
-          <GlassInput
-            label="Emergency Contact Name *"
-            placeholder="Parent or Guardian's Name"
-            value={emergencyContactName}
-            onChangeText={setEmergencyContactName}
-          />
-
-          <GlassInput
-            label="Emergency Contact Phone *"
-            placeholder="+91 90000 00000"
-            value={emergencyContactPhone}
-            onChangeText={setEmergencyContactPhone}
-            keyboardType="phone-pad"
-          />
-
-          <GlassInput
-            label="Blood Group (Optional)"
-            placeholder="e.g. O+, A-, B+"
-            value={bloodGroup}
-            onChangeText={setBloodGroup}
-          />
+          ))}
 
           {error && <Text style={styles.error}>{error}</Text>}
 
           <Pressable
-            style={[styles.button, !canSubmit && styles.buttonDisabled]}
+            style={[styles.button, (!canSubmit || submitting) && styles.buttonDisabled]}
             onPress={handleSubmit}
-            disabled={!canSubmit}
+            disabled={!canSubmit || submitting}
           >
             {submitting ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
               <>
-                <Text style={styles.buttonText}>Complete Setup</Text>
+                <Text style={styles.buttonText}>Complete setup</Text>
                 <Check size={20} color="#FFF" />
               </>
             )}
@@ -170,82 +138,83 @@ export default function CompleteProfileScreen() {
   );
 }
 
+function FieldInput({
+  field,
+  value,
+  onChange,
+}: {
+  field: ProfileFieldDef;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const label = `${field.label}${field.required ? ' *' : ''}`;
+  if (field.type === 'boolean') {
+    return (
+      <View style={styles.switchRow}>
+        <Text style={styles.switchLabel}>{label}</Text>
+        <Switch value={value === 'true'} onValueChange={(v) => onChange(v ? 'true' : 'false')} />
+      </View>
+    );
+  }
+  if (field.type === 'select' && field.options?.length) {
+    return (
+      <View>
+        <Text style={styles.switchLabel}>{label}</Text>
+        <View style={styles.radioGroup}>
+          {field.options.map((opt) => (
+            <Pressable
+              key={opt}
+              onPress={() => onChange(opt)}
+              style={[styles.radioOption, value === opt && styles.radioOptionActive]}
+            >
+              <Text style={[styles.radioText, value === opt && styles.radioTextActive]}>{opt}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+    );
+  }
+  return (
+    <GlassInput
+      label={label}
+      value={value}
+      onChangeText={onChange}
+      placeholder={field.help || field.label}
+      keyboardType={field.type === 'tel' ? 'phone-pad' : field.type === 'number' ? 'number-pad' : 'default'}
+    />
+  );
+}
+
 const styles = StyleSheet.create({
-  scrollContent: {
-    paddingBottom: spacing.xxl,
-  },
-  form: {
-    marginTop: spacing.xl,
-    gap: spacing.lg,
-  },
-  sectionTitle: {
-    ...typography.h3,
-    fontSize: 18,
-    color: colors.indigoink,
-    marginTop: spacing.sm,
-  },
-  label: {
-    ...typography.body,
-    fontSize: 14,
-    color: colors.subink,
-    marginBottom: spacing.sm,
-  },
-  radioGroup: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
+  scrollContent: { paddingBottom: spacing.xxl },
+  form: { marginTop: spacing.xl, gap: spacing.lg },
+  sectionTitle: { ...typography.h3, fontSize: 16, color: colors.indigoink, textTransform: 'capitalize' },
+  switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  switchLabel: { ...typography.body, fontSize: 14, color: colors.subink, marginBottom: spacing.sm },
+  radioGroup: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   radioOption: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(255,255,255,0.6)',
     borderRadius: radius.input,
     borderWidth: 1,
     borderColor: 'transparent',
   },
-  radioOptionActive: {
-    backgroundColor: colors.lavenderTint,
-    borderColor: colors.lavender,
-  },
-  radioText: {
-    ...typography.body,
-    color: colors.subink,
-  },
-  radioTextActive: {
-    color: colors.indigoink,
-    fontFamily: 'Inter_500Medium',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    marginVertical: spacing.md,
-  },
-  error: {
-    ...typography.caption,
-    color: '#C0433E',
-    textAlign: 'center',
-    marginTop: spacing.md,
-  },
+  radioOptionActive: { backgroundColor: colors.lavenderTint, borderColor: colors.lavender },
+  radioText: { ...typography.body, color: colors.subink },
+  radioTextActive: { color: colors.indigoink, fontFamily: 'Inter_500Medium' },
+  error: { ...typography.caption, color: '#C0433E', textAlign: 'center' },
   button: {
     flexDirection: 'row',
     backgroundColor: colors.indigoink,
     borderRadius: 16,
     paddingVertical: 16,
-    paddingHorizontal: 20,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: spacing.xl,
-    marginBottom: spacing.xl,
     ...shadows.soft,
     gap: 8,
   },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  buttonText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 15,
-    color: '#FFFFFF',
-  },
+  buttonDisabled: { opacity: 0.5 },
+  buttonText: { fontFamily: 'Inter_500Medium', fontSize: 15, color: '#FFFFFF' },
 });

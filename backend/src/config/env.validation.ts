@@ -9,6 +9,7 @@ export const envValidationSchema = Joi.object({
 
   DATABASE_URL: Joi.string().uri().required(),
   DIRECT_URL: Joi.string().uri().optional(),
+  REDIS_URL: Joi.string().uri().allow('').optional(),
 
   JWT_ACCESS_SECRET: Joi.string().min(16).required(),
   JWT_REFRESH_SECRET: Joi.string().min(16).required(),
@@ -29,7 +30,7 @@ export const envValidationSchema = Joi.object({
   SMTP_PORT: Joi.number().optional(),
   SMTP_USER: Joi.string().allow('').optional(),
   SMTP_PASS: Joi.string().allow('').optional(),
-  MAIL_FROM: Joi.string().default('Campus Safety <no-reply@campus-safety.app>'),
+  MAIL_FROM: Joi.string().default('Safety Platform <no-reply@safety-platform.app>'),
 
   // Where password-reset links point.
   ADMIN_PORTAL_URL: Joi.string().uri().allow('').optional(),

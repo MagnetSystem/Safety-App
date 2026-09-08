@@ -20,9 +20,10 @@ export default function RegisterScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [collegeId, setCollegeId] = useState<string | null>(null);
+  const [joinCode, setJoinCode] = useState('');
 
-  // College Picker Modal State
+  // Optional organization picker
+  const [collegeId, setCollegeId] = useState<string | null>(null);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -50,11 +51,10 @@ export default function RegisterScreen() {
   const selectedCollege = colleges.find(c => c.id === collegeId);
 
   const step1Valid = name.trim().length > 1 && email.trim().length > 0 && password.length >= 8;
-  const step2Valid = !!collegeId;
-  const canSubmit = step1Valid && step2Valid && !submitting;
+  const canSubmit = step1Valid && !submitting;
 
   const handleSubmit = async () => {
-    if (!canSubmit || !collegeId) return;
+    if (!canSubmit) return;
     setError(null);
     setSubmitting(true);
     try {
@@ -62,7 +62,7 @@ export default function RegisterScreen() {
         name: name.trim(),
         email: email.trim(),
         password,
-        collegeId,
+        joinCode: joinCode.trim() || undefined,
       });
       router.replace('/(auth)/complete-profile' as any);
     } catch (err: any) {
@@ -77,7 +77,7 @@ export default function RegisterScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <ScreenHeader
           title="Create account"
-          subtitle={step === 1 ? "Step 1: Your details" : "Step 2: Choose your College"}
+          subtitle={step === 1 ? "Step 1: Your details" : "Step 2: Organization (optional)"}
           back={step === 1 ? "/(auth)/login" : undefined}
           onBack={step === 2 ? () => setStep(1) : undefined}
         />
@@ -120,7 +120,18 @@ export default function RegisterScreen() {
           {step === 2 && (
             <>
               <View>
-                <Text style={styles.label}>Which college do you attend?</Text>
+                <Text style={styles.label}>Organization join code (optional)</Text>
+                <GlassInput
+                  label=""
+                  placeholder="e.g. DEMOJOIN"
+                  value={joinCode}
+                  onChangeText={(t) => setJoinCode(t.toUpperCase())}
+                  autoCapitalize="characters"
+                />
+                <Text style={styles.noticeText}>
+                  Skip this if you just want Emergency SOS and a Guardian. You can join an organization later from your profile.
+                </Text>
+                <Text style={[styles.label, { marginTop: 16 }]}>Or pick an organization</Text>
                 
                 <Pressable 
                   style={styles.dropdownTrigger}

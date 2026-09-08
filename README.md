@@ -1,6 +1,6 @@
 # Campus Safety App (Monorepo)
 
-Welcome to the **Campus Safety App** repository! This project is a comprehensive safety management solution designed for educational institutions. It consists of a mobile application for students to report incidents, a web-based dashboard for college administrators, and a centralized backend API to orchestrate everything.
+Welcome to the **Safety Platform** repository. This is a multi-tenant safety product: a member app for filing reports and Emergency SOS, a staff dashboard for Owners / Admins / Staff, and a shared backend. Any organization — college, company, care home, or a person on their own — uses the same system with their own private space.
 
 ---
 
@@ -13,12 +13,12 @@ This repository is structured as a **Monorepo**, housing the following core serv
   - Database Management: Prisma ORM
   - Purpose: Serves endpoints for user authentication, incident reporting, notifications, and data management.
 
-- **`/student-frontend`** - The Student Mobile App.
+- **`/student-frontend`** - The Member (and Guardian) mobile app.
   - Framework: React Native / Expo
-  - Purpose: Provides students with an intuitive interface to report safety concerns, view emergency contacts, and receive alerts.
+  - Purpose: Sign up alone or join an organization, file reports, trigger Emergency SOS, and link a Guardian who is alerted only in emergencies.
 
-- **`/Admin-collge-portal`** - The College Administrator Dashboard.
-  - Purpose: Allows security personnel and college administrators to manage incidents, track reports, and communicate with students.
+- **`/Admin-collge-portal`** - The organization dashboard.
+  - Purpose: Owners, Admins, and Staff review cases. Support (Magnet Systems) manages the platform itself.
 
 ---
 
@@ -43,6 +43,9 @@ Each application runs independently. To start development, open separate termina
 ```bash
 cd backend
 npm install
+# Optional, for cache / distributed rate limits / notification queue:
+# REDIS_URL=redis://127.0.0.1:6379
+npx prisma migrate deploy
 npm run start:dev
 ```
 

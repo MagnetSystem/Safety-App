@@ -24,7 +24,7 @@ const STATUS_OPTIONS: ComplaintStatus[] = [
 export default function ReportDetail() {
   const { id } = useParams();
   const { role } = useAuth();
-  const canManage = role === "college_admin" || role === "super_admin";
+  const canManage = role === "admin" || role === "owner" || role === "staff" || role === "support";
   const [report, setReport] = useState<Report | null>(null);
   const [evidence, setEvidence] = useState<Evidence[]>([]);
   const [loading, setLoading] = useState(true);
@@ -215,21 +215,26 @@ export default function ReportDetail() {
             <div>
               <h3 className="font-medium mb-1">Description</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">{report.description}</p>
+              {report.location && (
+                <div className="mt-3">
+                  <h4 className="text-sm font-medium mb-1 text-foreground">Specific Location Noted:</h4>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{report.location}</p>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4 text-sm">
-              {report.location && (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <MapPin size={16} /> {report.location}
-                </div>
-              )}
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Clock size={16} /> {new Date(report.createdAt).toLocaleString()}
               </div>
             </div>
 
-            {report.gpsLat != null && report.gpsLng != null && (
-              <div className="pt-2">
+            <div className="pt-2">
+              <h3 className="font-medium mb-3 flex items-center gap-2">
+                <MapPin size={18} className={report.gpsLat ? "text-primary" : "text-muted-foreground"} /> 
+                GPS Location Map
+              </h3>
+              {report.gpsLat != null && report.gpsLng != null ? (
                 <a
                   href={`https://www.google.com/maps?q=${report.gpsLat},${report.gpsLng}`}
                   target="_blank"
@@ -248,8 +253,12 @@ export default function ReportDetail() {
                     </div>
                   </div>
                 </a>
-              </div>
-            )}
+              ) : (
+                <div className="w-full h-24 rounded-xl border border-dashed border-border flex items-center justify-center bg-muted/20">
+                  <p className="text-sm text-muted-foreground italic">No GPS coordinates were captured for this report.</p>
+                </div>
+              )}
+            </div>
           </div>
           
           {/* Resolution Report */}

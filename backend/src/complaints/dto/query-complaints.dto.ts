@@ -1,28 +1,39 @@
-import { IsDateString, IsEnum, IsOptional, IsUUID } from 'class-validator';
-import { ComplaintPriority, ComplaintStatus, IncidentCategory, ReportType } from '@prisma/client';
+import { IsDateString, IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IncidentPriority, IncidentStatus, ReportType } from '@prisma/client';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
 export class QueryComplaintsDto extends PaginationDto {
   @IsOptional()
-  @IsEnum(ComplaintStatus)
-  status?: ComplaintStatus;
+  @IsEnum(IncidentStatus)
+  status?: IncidentStatus;
 
   @IsOptional()
   @IsEnum(ReportType)
   type?: ReportType;
 
   @IsOptional()
-  @IsEnum(IncidentCategory)
-  category?: IncidentCategory;
+  @IsString()
+  category?: string;
 
   @IsOptional()
-  @IsEnum(ComplaintPriority)
-  priority?: ComplaintPriority;
+  @IsEnum(IncidentPriority)
+  priority?: IncidentPriority;
 
-  /** Super Admin only — College Admins are always scoped to their own college. */
   @IsOptional()
   @IsUUID()
   collegeId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  organizationId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  assignedToUserId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  departmentId?: string;
 
   @IsOptional()
   @IsDateString()

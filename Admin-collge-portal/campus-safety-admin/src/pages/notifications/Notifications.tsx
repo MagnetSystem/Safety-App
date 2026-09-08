@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { Bell, AlertTriangle, FileText, Upload, Loader2 } from "lucide-react";
+import { Bell, AlertTriangle, FileText, Upload, Loader2, ChevronRight } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 import {
   getNotifications,
   markNotificationRead,
@@ -26,6 +28,8 @@ function timeAgo(iso: string) {
 }
 
 export default function Notifications() {
+  const { role } = useAuth();
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -39,7 +43,13 @@ export default function Notifications() {
   useEffect(load, []);
 
   const handleClick = async (n: AppNotification) => {
+    if (n.data?.complaintId) {
+      const basePath = role === 'support' ? '/super-admin/reports' : '/reports';
+      navigate(`${basePath}/${n.data.complaintId}`);
+    }
+    
     if (n.isRead) return;
+    
     setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, isRead: true } : x)));
     try {
       await markNotificationRead(n.id);
@@ -86,21 +96,26 @@ export default function Notifications() {
               <div
                 key={n.id}
                 onClick={() => handleClick(n)}
-                className={`flex gap-3 p-4 rounded-xl border transition cursor-pointer ${
+                className={`flex gap-3 p-4 rounded-xl border transition cursor-pointer group ${
                   !n.isRead
-                    ? "bg-primary/5 border-primary/20"
-                    : "bg-card/60 border-border hover:bg-muted/30"
+                    ? "bg-primary/5 border-primary/20 hover:bg-primary/10"
+                    : "bg-card/60 border-border hover:bg-muted/40"
                 }`}
               >
                 <div className={`mt-0.5 p-2 rounded-lg shrink-0 ${cls}`}>{icon}</div>
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between gap-2">
-                    <p className="font-medium text-sm">{n.title}</p>
+                    <p className="font-medium text-sm text-foreground">{n.title}</p>
                     {!n.isRead && <span className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1.5" />}
                   </div>
-                  <p className="text-sm text-muted-foreground mt-0.5">{n.body}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{timeAgo(n.createdAt)}</p>
+                  <p className="text-sm text-muted-foreground mt-0.5 leading-relaxed">{n.body}</p>
+                  <p className="text-[11px] font-medium text-muted-foreground/70 mt-1.5 uppercase tracking-wider">{timeAgo(n.createdAt)}</p>
                 </div>
+                {!!n.data?.complaintId && (
+                  <div className="flex items-center pl-1 shrink-0 text-muted-foreground/40 group-hover:text-primary/70 group-hover:translate-x-0.5 transition-all">
+                    <ChevronRight size={18} />
+                  </div>
+                )}
               </div>
             );
           })}

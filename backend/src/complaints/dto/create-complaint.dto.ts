@@ -1,16 +1,21 @@
-import { IsDateString, IsEnum, IsNumber, IsOptional, IsString, MinLength } from 'class-validator';
-import { IncidentCategory, ReportType } from '@prisma/client';
+import { IsDateString, IsEnum, IsNumber, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import { ReportType } from '@prisma/client';
 
 export class CreateComplaintDto {
   @IsEnum(ReportType)
   type!: ReportType;
 
-  @IsEnum(IncidentCategory)
-  category!: IncidentCategory;
+  @IsString()
+  @MinLength(2)
+  category!: string;
 
   @IsString()
   @MinLength(3)
   description!: string;
+
+  @IsOptional()
+  @IsUUID()
+  departmentId?: string;
 
   @IsOptional()
   @IsDateString()
@@ -22,13 +27,16 @@ export class CreateComplaintDto {
 
   @IsOptional()
   @IsString()
+  suspectedPeople?: string;
+
+  @IsOptional()
+  @IsString()
   suspectedStudents?: string;
 
   @IsOptional()
   @IsString()
   witnesses?: string;
 
-  // Emergency-only GPS capture
   @IsOptional()
   @IsNumber()
   gpsLat?: number;

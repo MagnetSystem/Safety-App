@@ -27,16 +27,16 @@ export default function SearchPage() {
     return () => clearTimeout(handle);
   }, [query]);
 
-  const reportsBase = role === "super_admin" ? "/super-admin" : "";
+  const reportsBase = role === "support" ? "/super-admin" : "";
 
   return (
     <div className="p-4 sm:p-6 max-w-[900px] mx-auto space-y-6">
       <div>
         <h1 className="text-xl sm:text-2xl font-semibold">Search</h1>
         <p className="text-sm text-muted-foreground">
-          {role === "super_admin"
-            ? "Search students and reports across the entire platform"
-            : "Search students and reports within your college only"}
+          {role === "support"
+            ? "Search members and cases across the entire platform"
+            : "Search members and cases within your organization"}
         </p>
       </div>
 
@@ -61,7 +61,7 @@ export default function SearchPage() {
         <div className="space-y-4">
           <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl p-4">
             <h3 className="text-sm font-medium text-muted-foreground mb-3">
-              Students {results.students.length > 0 && `(${results.students.length})`}
+              Members {results.students.length > 0 && `(${results.students.length})`}
             </h3>
             {results.students.length === 0 ? (
               <p className="text-sm text-muted-foreground">No matches.</p>
@@ -83,7 +83,7 @@ export default function SearchPage() {
 
           <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl p-4">
             <h3 className="text-sm font-medium text-muted-foreground mb-3">
-              Reports {results.complaints.length > 0 && `(${results.complaints.length})`}
+              Cases {results.complaints.length > 0 && `(${results.complaints.length})`}
             </h3>
             {results.complaints.length === 0 ? (
               <p className="text-sm text-muted-foreground">No matches.</p>
@@ -107,10 +107,10 @@ export default function SearchPage() {
             )}
           </div>
 
-          {role === "super_admin" && (
+          {role === "support" && (
             <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl p-4">
               <h3 className="text-sm font-medium text-muted-foreground mb-3">
-                Colleges {results.colleges.length > 0 && `(${results.colleges.length})`}
+                Organizations {results.colleges.length > 0 && `(${results.colleges.length})`}
               </h3>
               {results.colleges.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No matches.</p>

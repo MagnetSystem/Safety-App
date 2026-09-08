@@ -7,8 +7,10 @@ import { HeartPulse, Edit2, Check, X, Download, Trash2 } from 'lucide-react-nati
 import { Screen } from '../../src/components/PhoneFrame';
 import { Glass, ScreenHeader, GlassInput } from '../../src/components/ui-kit';
 import {
-  getMyProfile, updateMyProfile, exportMyData, deleteMyAccount,
+  getMyProfile, updateMyProfile, exportMyData, deleteMyAccount, joinOrganization,
 } from '../../src/services/studentsService';
+import { changePassword } from '../../src/services/authService';
+import { inviteGuardian, listMyGuardians, acceptGuardianCode } from '../../src/services/guardiansService';
 import type { StudentProfile } from '../../src/types';
 import { colors, radius, spacing, typography } from '../../src/constants/theme';
 import { useAuth } from '../../src/store/AuthContext';
@@ -67,6 +69,7 @@ export default function ProfileScreen() {
           emergencyContactPhone: p.emergencyContactPhone || '',
         });
         setError(null);
+        listMyGuardians().then(setGuardians).catch(() => undefined);
       })
       .catch(() => setError('Could not load your profile.'))
       .finally(() => setLoading(false));
@@ -79,10 +82,44 @@ export default function ProfileScreen() {
   );
 
   const [busy, setBusy] = useState<null | 'export' | 'delete'>(null);
+  const [joinCode, setJoinCode] = useState('');
+  const [joining, setJoining] = useState(false);
+  const [guardianCode, setGuardianCode] = useState<string | null>(null);
+  const [acceptCode, setAcceptCode] = useState('');
+  const [guardians, setGuardians] = useState<{ id: string; status: string; guardian: { email: string } | null }[]>([]);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [passwordMsg, setPasswordMsg] = useState<string | null>(null);
 
   const handleSignOut = async () => {
     await logout();
     router.replace('/(auth)/login');
+  };
+
+  const handleChangePassword = async () => {
+    if (newPassword.length < 8) {
+      Alert.alert('Password too short', 'Use at least 8 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      Alert.alert('Passwords do not match', 'Re-enter the new password.');
+      return;
+    }
+    setPasswordBusy(true);
+    setPasswordMsg(null);
+    try {
+      await changePassword(currentPassword, newPassword);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setPasswordMsg('Password updated.');
+    } catch (err: any) {
+      Alert.alert('Could not change password', err?.response?.data?.message ?? 'Check your current password.');
+    } finally {
+      setPasswordBusy(false);
+    }
   };
 
   const handleExport = async () => {
@@ -201,7 +238,7 @@ export default function ProfileScreen() {
             <Text style={styles.avatarInitials}>{initials || '?'}</Text>
           </View>
           <Text style={styles.name}>{name}</Text>
-          <Text style={styles.college}>{profile?.college?.name ?? NOT_SET}</Text>
+          <Text style={styles.college}>{profile?.college?.name ?? profile?.organization?.name ?? 'No organization yet'}</Text>
         </View>
 
         {!isEditing ? (
@@ -241,6 +278,106 @@ export default function ProfileScreen() {
                 <Row label="Emergency Phone" value={profile?.emergencyContactPhone ?? NOT_SET} />
                 <View style={styles.divider} />
                 <Row label="Blood group" value={profile?.bloodGroup ?? NOT_SET} />
+              </View>
+            </Glass>
+
+            <Glass style={styles.detailsCard}>
+              <Text style={styles.sectionHeader}>Organization &amp; Guardian</Text>
+              <View style={styles.divider} />
+              {!(profile?.organizationId || profile?.college?.id) && (
+                <>
+                  <GlassInput label="Join code" placeholder="DEMOJOIN" value={joinCode} onChangeText={(t) => setJoinCode(t.toUpperCase())} autoCapitalize="characters" />
+                  <Pressable
+                    style={styles.signOutBtn}
+                    disabled={joining || joinCode.length < 4}
+                    onPress={async () => {
+                      setJoining(true);
+                      try {
+                        await joinOrganization(joinCode.trim());
+                        loadProfile();
+                      } catch (err: any) {
+                        Alert.alert('Could not join', err?.response?.data?.message ?? 'Check the join code.');
+                      } finally {
+                        setJoining(false);
+                      }
+                    }}
+                  >
+                    <Text style={styles.signOutText}>{joining ? 'Joining…' : 'Join organization'}</Text>
+                  </Pressable>
+                  <View style={styles.divider} />
+                </>
+              )}
+              <Pressable
+                style={styles.privacyRow}
+                onPress={async () => {
+                  try {
+                    const invited = await inviteGuardian();
+                    setGuardianCode(invited.code);
+                  } catch {
+                    Alert.alert('Could not create invite');
+                  }
+                }}
+              >
+                <Text style={styles.privacyRowText}>Invite a Guardian</Text>
+              </Pressable>
+              {guardianCode && (
+                <Text style={styles.medicalDesc}>Share this one-time code: {guardianCode}</Text>
+              )}
+              {guardians.map((g) => (
+                <Row key={g.id} label={g.status} value={g.guardian?.email ?? 'Waiting to accept'} />
+              ))}
+              <View style={styles.divider} />
+              <GlassInput label="Accept a guardian invite" placeholder="CODE" value={acceptCode} onChangeText={(t) => setAcceptCode(t.toUpperCase())} autoCapitalize="characters" />
+              <Pressable
+                style={styles.privacyRow}
+                onPress={async () => {
+                  try {
+                    await acceptGuardianCode(acceptCode.trim());
+                    Alert.alert('Connected', 'You will be alerted if they trigger Emergency SOS.');
+                    setAcceptCode('');
+                  } catch (err: any) {
+                    Alert.alert('Could not accept', err?.response?.data?.message ?? 'Invalid code.');
+                  }
+                }}
+              >
+                <Text style={styles.privacyRowText}>Accept guardian code</Text>
+              </Pressable>
+            </Glass>
+
+            <Glass style={styles.detailsCard}>
+              <Text style={styles.sectionHeader}>Change password</Text>
+              <View style={styles.divider} />
+              <View style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.md, gap: spacing.md }}>
+                <GlassInput
+                  label="Current password"
+                  value={currentPassword}
+                  onChangeText={setCurrentPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                />
+                <GlassInput
+                  label="New password"
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  placeholder="At least 8 characters"
+                />
+                <GlassInput
+                  label="Confirm new password"
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                />
+                {passwordMsg ? <Text style={styles.passwordOk}>{passwordMsg}</Text> : null}
+                <Pressable
+                  style={[styles.signOutBtn, { marginTop: 0 }]}
+                  onPress={handleChangePassword}
+                  disabled={passwordBusy || !currentPassword || !newPassword}
+                >
+                  <Text style={styles.signOutText}>{passwordBusy ? 'Updating…' : 'Update password'}</Text>
+                </Pressable>
               </View>
             </Glass>
 
@@ -459,6 +596,10 @@ const styles = StyleSheet.create({
   },
   deleteText: {
     color: '#C0433E',
+  },
+  passwordOk: {
+    ...typography.caption,
+    color: colors.mintInk,
   },
   signOutBtn: {
     marginTop: spacing.xl,

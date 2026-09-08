@@ -6,35 +6,38 @@ import { EvidenceService } from './evidence.service';
 import { RequestUploadUrlDto } from './dto/request-upload-url.dto';
 import { ConfirmEvidenceDto } from './dto/confirm-evidence.dto';
 
-@Controller('complaints/:complaintId/evidence')
+@Controller([
+  'incidents/:incidentId/evidence',
+  'complaints/:incidentId/evidence',
+])
 export class EvidenceController {
   constructor(private readonly evidenceService: EvidenceService) {}
 
   @Post('upload-url')
   requestUploadUrl(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('complaintId', ParseUUIDPipe) complaintId: string,
+    @Param('incidentId', ParseUUIDPipe) incidentId: string,
     @Body() dto: RequestUploadUrlDto,
   ) {
-    return this.evidenceService.requestUploadUrl(user, complaintId, dto);
+    return this.evidenceService.requestUploadUrl(user, incidentId, dto);
   }
 
   @Post()
-  @Audit({ action: 'EVIDENCE_UPLOADED', entityType: 'Complaint', entityIdParam: 'complaintId' })
+  @Audit({ action: 'EVIDENCE_UPLOADED', entityType: 'Incident', entityIdParam: 'incidentId' })
   confirmUpload(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('complaintId', ParseUUIDPipe) complaintId: string,
+    @Param('incidentId', ParseUUIDPipe) incidentId: string,
     @Body() dto: ConfirmEvidenceDto,
   ) {
-    return this.evidenceService.confirmUpload(user, complaintId, dto);
+    return this.evidenceService.confirmUpload(user, incidentId, dto);
   }
 
   @Get()
-  @Audit({ action: 'EVIDENCE_DOWNLOADED', entityType: 'Complaint', entityIdParam: 'complaintId' })
+  @Audit({ action: 'EVIDENCE_DOWNLOADED', entityType: 'Incident', entityIdParam: 'incidentId' })
   list(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('complaintId', ParseUUIDPipe) complaintId: string,
+    @Param('incidentId', ParseUUIDPipe) incidentId: string,
   ) {
-    return this.evidenceService.list(user, complaintId);
+    return this.evidenceService.list(user, incidentId);
   }
 }

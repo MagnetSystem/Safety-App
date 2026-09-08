@@ -1,17 +1,32 @@
-export type BackendRole = 'STUDENT' | 'COLLEGE_ADMIN' | 'SUPER_ADMIN';
-export type Role = 'college_admin' | 'super_admin' | null;
+export type BackendRole = 'MEMBER' | 'GUARDIAN' | 'STAFF' | 'ADMIN' | 'OWNER' | 'SUPPORT';
+export type Role = 'staff' | 'admin' | 'owner' | 'support' | null;
 
 export interface User {
   id: string;
   email: string;
   name: string;
   role: Role;
+  organizationId: string | null;
+  organizationName?: string | null;
+  /** @deprecated */
   collegeId: string | null;
   collegeName?: string | null;
+  supportSession?: { organizationId: string; organizationName: string } | null;
 }
 
-export function toAppRole(role: BackendRole): Exclude<Role, null> | null {
-  if (role === 'COLLEGE_ADMIN') return 'college_admin';
-  if (role === 'SUPER_ADMIN') return 'super_admin';
-  return null;
+const ROLE_MAP: Record<BackendRole, Exclude<Role, null> | null> = {
+  MEMBER: null,
+  GUARDIAN: null,
+  STAFF: 'staff',
+  ADMIN: 'admin',
+  OWNER: 'owner',
+  SUPPORT: 'support',
+};
+
+export function toAppRole(role: BackendRole | string): Exclude<Role, null> | null {
+  return ROLE_MAP[role as BackendRole] ?? null;
+}
+
+export function isOrgDashboardRole(role: Role): boolean {
+  return role === 'staff' || role === 'admin' || role === 'owner';
 }

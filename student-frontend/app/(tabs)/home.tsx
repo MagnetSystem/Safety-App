@@ -122,6 +122,7 @@ export default function HomeScreen() {
   );
 
   const firstName = (profile?.name ?? user?.email ?? 'there').split(' ')[0];
+  const inOrganization = !!(profile?.organizationId ?? profile?.college?.id ?? user?.organizationId);
 
   return (
     <Screen padded>
@@ -131,7 +132,7 @@ export default function HomeScreen() {
             <View>
               <Text style={styles.greeting}>Good to see you,</Text>
               <Text style={styles.name}>{firstName}</Text>
-              <Text style={styles.college}>{profile?.college?.name ?? ' '}</Text>
+              <Text style={styles.college}>{profile?.college?.name ?? profile?.organization?.name ?? (inOrganization ? ' ' : 'Personal safety')}</Text>
             </View>
             <Pressable style={styles.bellButton} onPress={() => router.push('/notifications' as any)}>
               <Glass style={styles.bellGlass}>
@@ -150,6 +151,7 @@ export default function HomeScreen() {
           <SOSButton />
         </View>
 
+        {inOrganization ? (
         <View style={styles.actionGrid}>
           <Pressable style={styles.actionCard} onPress={() => router.push({ pathname: '/report/new', params: { mode: 'normal' } })}>
             <Glass style={styles.actionGlass}>
@@ -170,6 +172,13 @@ export default function HomeScreen() {
             </Glass>
           </Pressable>
         </View>
+        ) : (
+          <Glass style={styles.emptyCard}>
+            <Text style={styles.emptyText}>
+              You are using the app on your own. Emergency SOS alerts your Guardian. Join an organization from Profile to file reports.
+            </Text>
+          </Glass>
+        )}
 
         <View style={styles.reportsSection}>
           <View style={styles.reportsHeader}>

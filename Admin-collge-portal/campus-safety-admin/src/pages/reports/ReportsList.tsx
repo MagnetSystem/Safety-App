@@ -62,8 +62,8 @@ export default function ReportsList() {
     <div className="p-4 sm:p-6 space-y-5 max-w-[1400px] mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-semibold">Reports</h1>
-          <p className="text-sm text-muted-foreground">Manage and act on all college reports</p>
+          <h1 className="text-xl sm:text-2xl font-semibold tracking-tight">Cases</h1>
+          <p className="text-sm text-muted-foreground">Triage, assign and close work for your organization</p>
         </div>
         <button
           onClick={() => downloadCsv(reports)}

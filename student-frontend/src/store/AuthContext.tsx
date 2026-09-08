@@ -10,6 +10,7 @@ interface SessionUser {
   id: string;
   email: string;
   role: string;
+  organizationId: string | null;
   collegeId: string | null;
 }
 
@@ -71,11 +72,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       try {
         const me = await getMe();
+        const organizationId =
+          me.member?.organizationId ??
+          me.student?.collegeId ??
+          me.orgStaff?.organizationId ??
+          me.collegeAdmin?.collegeId ??
+          null;
         setUser({
           id: me.id,
           email: me.email,
           role: me.role,
-          collegeId: me.student?.collegeId ?? me.collegeAdmin?.collegeId ?? null,
+          organizationId,
+          collegeId: organizationId,
         });
       } catch {
         await deleteItem('accessToken');

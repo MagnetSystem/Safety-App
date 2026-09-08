@@ -70,6 +70,7 @@ export type EvidenceType = 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT';
 export interface StudentProfile {
   id: string;
   name: string;
+  memberNumber?: string | null;
   studentNumber: string | null;
   department: string | null;
   course: string | null;
@@ -84,8 +85,37 @@ export interface StudentProfile {
   guardianPhone: string | null;
   emergencyContactName: string | null;
   emergencyContactPhone: string | null;
+  organizationId?: string | null;
+  organization?: {
+    id: string;
+    name: string;
+    code: string;
+    industry?: string;
+    settings?: {
+      profileFieldDefs?: ProfileFieldDef[];
+      features?: { guardianAlerts?: boolean; reporting?: boolean; departmentsEnabled?: boolean };
+    };
+    organizationType?: {
+      slug: string;
+      label: string;
+      blurb?: string;
+      memberFields?: ProfileFieldDef[];
+    } | null;
+  };
   college?: { id: string; name: string; code: string };
   user?: { id: string; email: string };
+  profile?: Record<string, unknown>;
+}
+
+export interface ProfileFieldDef {
+  key: string;
+  label: string;
+  type: string;
+  group: string;
+  required?: boolean;
+  options?: string[];
+  help?: string;
+  memberColumn?: boolean;
 }
 
 export const WORKFLOW_STATUSES: ComplaintStatus[] = [

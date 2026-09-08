@@ -20,10 +20,9 @@ export default function Login() {
     try {
       const actualRole = await login(form.email, form.password);
 
-      if (actualRole === "super_admin") {
+      if (actualRole === "support") {
         navigate("/super-admin");
-      } else if (actualRole === "college_admin") {
-        // First-time login after self-registration: show onboarding
+      } else if (actualRole === "owner" || actualRole === "admin" || actualRole === "staff") {
         if (localStorage.getItem("campus_onboarding") === "true") {
           navigate("/onboarding");
         } else {
@@ -53,7 +52,7 @@ export default function Login() {
           }`}
         >
           <Shield size={16} />
-          <span className="hidden xs:inline">College</span> Admin
+          Organization
         </button>
         <button
           type="button"
@@ -65,7 +64,7 @@ export default function Login() {
           }`}
         >
           <Crown size={16} />
-          <span className="hidden xs:inline">Super</span> Admin
+          Support
         </button>
       </div>
 
@@ -81,12 +80,12 @@ export default function Login() {
           {role === "college" ? <Shield size={24} /> : <Crown size={24} />}
         </div>
         <h1 className="text-xl font-semibold text-foreground">
-          {role === "college" ? "College Admin Login" : "Super Admin Login"}
+          {role === "college" ? "Organization login" : "Support login"}
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
           {role === "college"
-            ? "Sign in to manage reports and students"
-            : "Sign in to manage the entire platform"}
+            ? "Sign in as Owner, Admin, or Staff"
+            : "Sign in to manage the platform"}
         </p>
       </div>
 

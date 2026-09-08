@@ -1,14 +1,29 @@
 /**
- * A College Admin (and everyone else, per the platform's anonymity guarantee) must
- * never see who filed an Anonymous report. The internal studentId is kept on the row
- * for anti-spam / safe-follow-up purposes only and is stripped from every API response.
+ * Anonymous reports never expose the member's identity in API responses.
+ * Also attaches legacy student/college field names so existing clients keep working.
  */
-export function maskAnonymousComplaint<T extends { isAnonymous: boolean; studentId?: string | null; student?: unknown }>(
-  complaint: T,
-) {
-  if (!complaint.isAnonymous) {
-    return { ...complaint, reporterLabel: (complaint as any).student?.name ?? null };
+export function maskAnonymousComplaint(incident: any) {
+  const member = incident.member;
+  const legacy = {
+    ...incident,
+    studentId: incident.memberId ?? null,
+    student: member ? { ...member, studentNumber: member.memberNumber ?? null } : null,
+    collegeId: incident.organizationId ?? null,
+    college: incident.organization ?? null,
+    suspectedStudents: incident.suspectedPeople ?? null,
+    assignedCommitteeUserIds: incident.assignedToUserId ? [incident.assignedToUserId] : [],
+  };
+
+  if (!incident.isAnonymous) {
+    return { ...legacy, reporterLabel: member?.name ?? null };
   }
-  const { studentId, student, ...rest } = complaint as any;
-  return { ...rest, reporterLabel: 'Anonymous Student' };
+
+  return {
+    ...legacy,
+    memberId: undefined,
+    member: undefined,
+    studentId: null,
+    student: null,
+    reporterLabel: 'Anonymous',
+  };
 }

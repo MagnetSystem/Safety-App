@@ -12,8 +12,9 @@ export class RegisterStudentDto {
   @MinLength(2)
   name!: string;
 
+  @IsOptional()
   @IsUUID()
-  collegeId!: string;
+  collegeId?: string;
 
   @IsOptional()
   @IsString()

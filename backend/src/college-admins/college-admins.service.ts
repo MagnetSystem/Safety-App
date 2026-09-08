@@ -1,12 +1,14 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
-import { Prisma } from '@prisma/client';
+import { OrgRole, Prisma, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCollegeAdminDto } from './dto/create-college-admin.dto';
 import { UpdateCollegeAdminDto } from './dto/update-college-admin.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { QueryCollegeAdminsDto } from './dto/query-college-admins.dto';
 import { Paginated } from '../common/dto/pagination.dto';
+import type { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
+import { canManageAdmins, canManageStaff, orgRoleToUserRole } from '../common/org-roles';
 
 const BCRYPT_ROUNDS = 10;
 
@@ -14,84 +16,115 @@ const SAFE_SELECT = {
   id: true,
   name: true,
   phone: true,
-  collegeId: true,
-  college: { select: { id: true, name: true, code: true } },
-  user: { select: { id: true, email: true, isActive: true, createdAt: true } },
+  organizationId: true,
+  orgRole: true,
+  organization: { select: { id: true, name: true, code: true } },
+  user: { select: { id: true, email: true, isActive: true, role: true, createdAt: true } },
+  departments: { include: { department: { select: { id: true, name: true, slug: true } } } },
 } as const;
 
 @Injectable()
 export class CollegeAdminsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateCollegeAdminDto) {
-    const college = await this.prisma.college.findUnique({ where: { id: dto.collegeId } });
-    if (!college) throw new NotFoundException('College not found');
+  async create(requester: AuthenticatedUser, dto: CreateCollegeAdminDto) {
+    const organizationId =
+      requester.role === UserRole.SUPPORT
+        ? (dto.organizationId ?? dto.collegeId)
+        : requester.organizationId;
+    if (!organizationId) throw new ForbiddenException('Organization is required');
+
+    const orgRole = dto.orgRole ?? OrgRole.STAFF;
+    if (orgRole === OrgRole.OWNER || orgRole === OrgRole.ADMIN) {
+      if (!canManageAdmins(requester) && requester.role !== UserRole.SUPPORT) {
+        throw new ForbiddenException('Only an Owner can add Admins');
+      }
+    } else if (!canManageStaff(requester) && requester.role !== UserRole.SUPPORT) {
+      throw new ForbiddenException('You cannot add staff');
+    }
+
+    const organization = await this.prisma.organization.findUnique({ where: { id: organizationId } });
+    if (!organization) throw new NotFoundException('Organization not found');
 
     const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
     if (existing) throw new ConflictException('An account with this email already exists');
 
     const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
-
     const user = await this.prisma.user.create({
       data: {
         email: dto.email,
         passwordHash,
-        role: 'COLLEGE_ADMIN',
-        collegeAdmin: {
-          create: { name: dto.name, phone: dto.phone, collegeId: dto.collegeId },
+        role: orgRoleToUserRole(orgRole),
+        orgStaff: {
+          create: {
+            name: dto.name,
+            phone: dto.phone,
+            organizationId,
+            orgRole,
+          },
         },
       },
-      include: { collegeAdmin: true },
+      include: { orgStaff: true },
     });
 
-    return this.findOne(user.collegeAdmin!.id);
+    if (dto.departmentIds?.length && user.orgStaff) {
+      await this.prisma.departmentStaff.createMany({
+        data: dto.departmentIds.map((departmentId) => ({
+          departmentId,
+          orgStaffId: user.orgStaff!.id,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    return this.findOne(user.orgStaff!.id);
   }
 
-  async findAll(query: QueryCollegeAdminsDto): Promise<Paginated<unknown>> {
+  async findAll(requester: AuthenticatedUser, query: QueryCollegeAdminsDto): Promise<Paginated<unknown>> {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
-    const where: Prisma.CollegeAdminWhereInput = query.collegeId
-      ? { collegeId: query.collegeId }
-      : {};
+    const organizationId =
+      requester.role === UserRole.SUPPORT ? (query.collegeId ?? undefined) : requester.organizationId!;
+    const where: Prisma.OrgStaffWhereInput = organizationId ? { organizationId } : {};
 
     const [items, total] = await Promise.all([
-      this.prisma.collegeAdmin.findMany({
+      this.prisma.orgStaff.findMany({
         where,
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
         select: SAFE_SELECT,
       }),
-      this.prisma.collegeAdmin.count({ where }),
+      this.prisma.orgStaff.count({ where }),
     ]);
 
     return { items, total, page, pageSize };
   }
 
   async findOne(id: string) {
-    const admin = await this.prisma.collegeAdmin.findUnique({ where: { id }, select: SAFE_SELECT });
-    if (!admin) throw new NotFoundException('College admin not found');
-    return admin;
+    const staff = await this.prisma.orgStaff.findUnique({ where: { id }, select: SAFE_SELECT });
+    if (!staff) throw new NotFoundException('Staff member not found');
+    return staff;
   }
 
   async update(id: string, dto: UpdateCollegeAdminDto) {
     await this.findOne(id);
-    await this.prisma.collegeAdmin.update({ where: { id }, data: dto });
+    await this.prisma.orgStaff.update({ where: { id }, data: dto });
     return this.findOne(id);
   }
 
   async updateStatus(id: string, isActive: boolean) {
-    const admin = await this.prisma.collegeAdmin.findUnique({ where: { id } });
-    if (!admin) throw new NotFoundException('College admin not found');
-    await this.prisma.user.update({ where: { id: admin.userId }, data: { isActive } });
+    const staff = await this.prisma.orgStaff.findUnique({ where: { id } });
+    if (!staff) throw new NotFoundException('Staff member not found');
+    await this.prisma.user.update({ where: { id: staff.userId }, data: { isActive } });
     return this.findOne(id);
   }
 
   async resetPassword(id: string, dto: ResetPasswordDto) {
-    const admin = await this.prisma.collegeAdmin.findUnique({ where: { id } });
-    if (!admin) throw new NotFoundException('College admin not found');
+    const staff = await this.prisma.orgStaff.findUnique({ where: { id } });
+    if (!staff) throw new NotFoundException('Staff member not found');
     const passwordHash = await bcrypt.hash(dto.newPassword, BCRYPT_ROUNDS);
-    await this.prisma.user.update({ where: { id: admin.userId }, data: { passwordHash } });
+    await this.prisma.user.update({ where: { id: staff.userId }, data: { passwordHash } });
     return { success: true };
   }
 }

@@ -36,7 +36,7 @@ export default function Dashboard() {
         <div>
           <h1 className="text-xl sm:text-2xl font-semibold text-foreground">Dashboard</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Overview of reports in your college
+            Overview of cases in your organization
           </p>
         </div>
         <form onSubmit={handleSearch} className="relative w-full sm:w-64">

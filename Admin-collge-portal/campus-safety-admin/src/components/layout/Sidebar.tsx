@@ -12,6 +12,10 @@ import {
   Menu,
   X,
   LogOut,
+  Building,
+  Mail,
+  User as UserIcon,
+  Settings,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
@@ -28,6 +32,7 @@ export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [showProfile, setShowProfile] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -39,10 +44,16 @@ export default function Sidebar() {
 
   const navItems: NavItem[] = [
     { icon: LayoutGrid, label: "Dashboard", to: "/" },
-    { icon: FileWarning, label: "Reports", to: "/reports" },
-    { icon: Users, label: "Students", to: "/students" },
+    { icon: FileWarning, label: "Cases", to: "/reports" },
+    ...(user?.role === "staff"
+      ? []
+      : [
+          { icon: Users, label: "Members", to: "/students" },
+          { icon: Building, label: "Departments", to: "/departments" },
+        ]),
     { icon: Search, label: "Search", to: "/search" },
     { icon: Bell, label: "Notifications", to: "/notifications", badge: unreadCount || undefined },
+    { icon: Settings, label: "Settings", to: "/settings" },
   ];
 
   const handleLogout = () => {
@@ -83,6 +94,7 @@ export default function Sidebar() {
 
       {/* Profile card */}
       <button
+        onClick={() => setShowProfile(true)}
         className={`
           flex items-center gap-2.5 mb-5 rounded-xl
           bg-white/40 hover:bg-white/60
@@ -100,9 +112,9 @@ export default function Sidebar() {
           <>
             <div className="flex-1 min-w-0 text-left">
               <p className="text-[13.5px] font-semibold text-slate-800 truncate">
-                {user?.name || 'College Admin'}
+                {user?.name || 'Staff'}
               </p>
-              <p className="text-[11.5px] text-slate-500 truncate">College Admin</p>
+              <p className="text-[11.5px] text-slate-500 truncate">{user?.organizationName || user?.collegeName || 'Organization'}</p>
             </div>
             <ChevronsUpDown size={15} className="text-slate-400 shrink-0" />
           </>
@@ -135,8 +147,8 @@ export default function Sidebar() {
                 ${collapsed && !isMobile ? "justify-center p-2.5" : "justify-between px-2.5 py-2"}
                 ${
                   isActive
-                    ? "bg-violet-500/15 text-violet-700 border border-violet-300/40 shadow-sm backdrop-blur-sm"
-                    : "text-slate-600 hover:bg-white/50 hover:text-slate-800 border border-transparent"
+                    ? "bg-teal-50 text-teal-800 border border-teal-100"
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-800 border border-transparent"
                 }`
               }
             >
@@ -222,6 +234,58 @@ export default function Sidebar() {
       >
         {sidebarContent(false)}
       </aside>
+
+      {/* Profile Modal */}
+      {showProfile && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white w-full max-w-sm rounded-2xl border border-white/60 shadow-2xl overflow-hidden relative">
+            <button
+              onClick={() => setShowProfile(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition"
+            >
+              <X size={16} />
+            </button>
+            <div className="p-6 text-center border-b border-slate-100">
+              <div className="mx-auto h-20 w-20 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center text-2xl font-bold border-4 border-white shadow-sm mb-3">
+                {user?.name?.split(' ').map(n => n[0]).join('') || 'CA'}
+              </div>
+              <h2 className="text-xl font-bold text-slate-800">{user?.name}</h2>
+              <p className="text-sm font-medium text-violet-600 mt-1">{user?.organizationName || user?.collegeName || 'Organization'}</p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="flex items-center gap-3 text-slate-600">
+                <div className="p-2 rounded-lg bg-slate-50"><Mail size={16} className="text-slate-500"/></div>
+                <div className="text-sm">
+                  <p className="text-xs text-slate-400 font-medium">Email Address</p>
+                  <p className="font-medium text-slate-700">{user?.email}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 text-slate-600">
+                <div className="p-2 rounded-lg bg-slate-50"><Building size={16} className="text-slate-500"/></div>
+                <div className="text-sm">
+                  <p className="text-xs text-slate-400 font-medium">Organization ID</p>
+                  <p className="font-medium text-slate-700 font-mono">{user?.organizationId || user?.collegeId || 'N/A'}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 text-slate-600">
+                <div className="p-2 rounded-lg bg-slate-50"><UserIcon size={16} className="text-slate-500"/></div>
+                <div className="text-sm">
+                  <p className="text-xs text-slate-400 font-medium">Role</p>
+                  <p className="font-medium text-slate-700 uppercase tracking-wider text-[11px]">{user?.role}</p>
+                </div>
+              </div>
+            </div>
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+              <button
+                onClick={() => setShowProfile(false)}
+                className="px-5 py-2 text-sm font-medium bg-white border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-100 transition shadow-sm"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

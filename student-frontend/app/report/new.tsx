@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Alert
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+import * as Location from 'expo-location';
 import { ImagePlus, Paperclip, X, FileText } from 'lucide-react-native';
 import { Screen } from '../../src/components/PhoneFrame';
 import { Glass, ScreenHeader, GlassInput } from '../../src/components/ui-kit';
@@ -87,12 +88,29 @@ export default function NewReportScreen() {
     if (!canSubmit) return;
     setError(null);
     setSubmitting(true);
+
+    let gps: { gpsLat?: number; gpsLng?: number; gpsAccuracy?: number } = {};
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        const position = await Location.getCurrentPositionAsync({});
+        gps = {
+          gpsLat: position.coords.latitude,
+          gpsLng: position.coords.longitude,
+          gpsAccuracy: position.coords.accuracy ?? undefined,
+        };
+      }
+    } catch {
+      // Proceed without GPS if error
+    }
+
     try {
       const complaint = await createComplaint({
         type: isAnonymous ? 'ANONYMOUS' : 'NORMAL',
         category,
         description: description.trim(),
         location: location.trim() || undefined,
+        ...gps,
       });
 
       if (attachments.length > 0) {

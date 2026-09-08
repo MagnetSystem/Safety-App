@@ -3,7 +3,7 @@ import api from './api';
 export interface LoginResponse {
   accessToken: string;
   refreshToken: string;
-  user: { id: string; email: string; role: string; collegeId: string | null };
+  user: { id: string; email: string; role: string; organizationId: string | null; collegeId: string | null };
 }
 
 export const login = async (email: string, password: string) => {
@@ -11,22 +11,33 @@ export const login = async (email: string, password: string) => {
   return data;
 };
 
-export interface RegisterStudentInput {
+export interface RegisterMemberInput {
   email: string;
   password: string;
   name: string;
-  collegeId: string;
-  studentNumber?: string;
+  joinCode?: string;
   mobile?: string;
+  collegeId?: string;
+  studentNumber?: string;
   department?: string;
   course?: string;
   year?: number;
 }
 
-export const registerStudent = async (input: RegisterStudentInput) => {
-  const { data } = await api.post<LoginResponse>('/auth/register/student', input);
+export type RegisterStudentInput = RegisterMemberInput;
+
+export const registerMember = async (input: RegisterMemberInput) => {
+  const { data } = await api.post<LoginResponse>('/auth/register/member', {
+    email: input.email,
+    password: input.password,
+    name: input.name,
+    joinCode: input.joinCode,
+    mobile: input.mobile,
+  });
   return data;
 };
+
+export const registerStudent = registerMember;
 
 export const getMe = async () => {
   const { data } = await api.get('/auth/me');
@@ -40,5 +51,13 @@ export const forgotPassword = async (email: string) => {
 
 export const resetPassword = async (token: string, newPassword: string) => {
   const { data } = await api.post<{ message: string }>('/auth/reset-password', { token, newPassword });
+  return data;
+};
+
+export const changePassword = async (currentPassword: string, newPassword: string) => {
+  const { data } = await api.patch<{ success: boolean }>('/auth/change-password', {
+    currentPassword,
+    newPassword,
+  });
   return data;
 };

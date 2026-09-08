@@ -1,4 +1,4 @@
-import { IsBoolean, IsDateString, IsInt, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsDateString, IsInt, IsObject, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class UpdateStudentProfileDto {
   @IsOptional()
@@ -24,6 +24,14 @@ export class UpdateStudentProfileDto {
   @IsOptional()
   @IsString()
   department?: string;
+
+  @IsOptional()
+  @IsUUID()
+  assignedDepartmentId?: string | null;
+
+  @IsOptional()
+  @IsObject()
+  profile?: Record<string, unknown>;
 
   @IsOptional()
   @IsString()

@@ -7,7 +7,7 @@ import { SearchService } from './search.service';
 import { SearchQueryDto } from './dto/search-query.dto';
 
 @Controller('search')
-@Roles(UserRole.SUPER_ADMIN, UserRole.COLLEGE_ADMIN)
+@Roles(UserRole.SUPPORT, UserRole.STAFF)
 export class SearchController {
   constructor(private readonly searchService: SearchService) {}
 

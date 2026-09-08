@@ -11,12 +11,12 @@ import { AssignCommitteeDto } from './dto/assign-committee.dto';
 import { QueryComplaintsDto } from './dto/query-complaints.dto';
 import { CreateMessageDto } from './dto/create-message.dto';
 
-@Controller('complaints')
+@Controller(['incidents', 'complaints'])
 export class ComplaintsController {
   constructor(private readonly complaintsService: ComplaintsService) {}
 
   @Post()
-  @Roles(UserRole.STUDENT)
+  @Roles(UserRole.MEMBER)
   create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateComplaintDto) {
     return this.complaintsService.create(user, dto);
   }
@@ -27,7 +27,7 @@ export class ComplaintsController {
   }
 
   @Get(':id')
-  @Audit({ action: 'COMPLAINT_VIEWED', entityType: 'Complaint' })
+  @Audit({ action: 'INCIDENT_VIEWED', entityType: 'Incident' })
   findOne(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.complaintsService.findOneForRequester(user, id);
   }
@@ -43,7 +43,7 @@ export class ComplaintsController {
   }
 
   @Post(':id/messages')
-  @Audit({ action: 'COMPLAINT_MESSAGE_ADDED', entityType: 'Complaint' })
+  @Audit({ action: 'INCIDENT_MESSAGE_ADDED', entityType: 'Incident' })
   addMessage(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -53,8 +53,8 @@ export class ComplaintsController {
   }
 
   @Patch(':id/status')
-  @Roles(UserRole.COLLEGE_ADMIN)
-  @Audit({ action: 'COMPLAINT_STATUS_CHANGED', entityType: 'Complaint' })
+  @Roles(UserRole.STAFF)
+  @Audit({ action: 'INCIDENT_STATUS_CHANGED', entityType: 'Incident' })
   updateStatus(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -64,8 +64,8 @@ export class ComplaintsController {
   }
 
   @Patch(':id/assign')
-  @Roles(UserRole.COLLEGE_ADMIN)
-  @Audit({ action: 'COMPLAINT_COMMITTEE_ASSIGNED', entityType: 'Complaint' })
+  @Roles(UserRole.ADMIN)
+  @Audit({ action: 'INCIDENT_ASSIGNED', entityType: 'Incident' })
   assignCommittee(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,

@@ -7,7 +7,8 @@ import { QueryAuditLogsDto } from './dto/query-audit-logs.dto';
 
 interface RecordAuditLogInput {
   actorId: string | null;
-  collegeId: string | null;
+  organizationId?: string | null;
+  collegeId?: string | null;
   action: string;
   entityType: string;
   entityId?: string | null;
@@ -23,7 +24,7 @@ export class AuditLogsService {
     return this.prisma.auditLog.create({
       data: {
         actorId: input.actorId,
-        collegeId: input.collegeId,
+        organizationId: input.organizationId ?? input.collegeId ?? null,
         action: input.action,
         entityType: input.entityType,
         entityId: input.entityId ?? null,
@@ -39,11 +40,10 @@ export class AuditLogsService {
 
     const where: Prisma.AuditLogWhereInput = {};
 
-    // College Admins may only ever see their own college's audit trail.
-    if (user.role === 'COLLEGE_ADMIN') {
-      where.collegeId = user.collegeId;
+    if (user.role === 'ADMIN' || user.role === 'OWNER' || user.role === 'STAFF') {
+      where.organizationId = user.organizationId;
     } else if (query.collegeId) {
-      where.collegeId = query.collegeId;
+      where.organizationId = query.collegeId;
     }
 
     if (query.action) where.action = query.action;
@@ -57,7 +57,7 @@ export class AuditLogsService {
         take: pageSize,
         include: {
           actor: { select: { id: true, email: true, role: true } },
-          college: { select: { id: true, name: true } },
+          organization: { select: { id: true, name: true } },
         },
       }),
       this.prisma.auditLog.count({ where }),

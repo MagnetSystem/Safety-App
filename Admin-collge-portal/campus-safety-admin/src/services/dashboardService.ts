@@ -12,6 +12,9 @@ export interface CollegeAdminDashboard {
 }
 
 export interface SuperAdminDashboard {
+  totalOrganizations?: number;
+  totalMembers?: number;
+  totalStaff?: number;
   totalColleges: number;
   totalStudents: number;
   totalCollegeAdmins: number;

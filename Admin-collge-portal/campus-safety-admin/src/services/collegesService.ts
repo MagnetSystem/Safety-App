@@ -11,6 +11,7 @@ export interface CreateCollegeInput {
   principal?: string;
   phone?: string;
   email?: string;
+  industry?: string;
 }
 
 export const getColleges = async (params: { page?: number; pageSize?: number; search?: string } = {}) => {
@@ -31,4 +32,34 @@ export const createCollege = async (input: CreateCollegeInput) => {
 export const updateCollegeStatus = async (id: string, status: 'ACTIVE' | 'SUSPENDED') => {
   const { data } = await api.patch<College>(`/colleges/${id}/status`, { status });
   return data;
+};
+
+export const getMyOrganization = async () => {
+  const { data } = await api.get('/organizations/me');
+  return data;
+};
+
+export const updateMyOrganization = async (input: Partial<CreateCollegeInput>) => {
+  const { data } = await api.patch('/organizations/me', input);
+  return data;
+};
+
+export const updateMyOrgSettings = async (settings: unknown) => {
+  const { data } = await api.patch('/organizations/me/settings', settings);
+  return data;
+};
+
+export const rotateJoinCode = async () => {
+  const { data } = await api.post<{ id: string; joinCode: string }>('/organizations/me/join-code');
+  return data;
+};
+
+export const getOrganization = async (id: string) => {
+  const { data } = await api.get(`/organizations/${id}`);
+  return data;
+};
+
+export const resetOwnerPassword = async (organizationId: string, newPassword: string) => {
+  const { data } = await api.patch(`/organizations/${organizationId}/reset-owner-password`, { newPassword });
+  return data as { success: boolean; ownerEmail?: string };
 };

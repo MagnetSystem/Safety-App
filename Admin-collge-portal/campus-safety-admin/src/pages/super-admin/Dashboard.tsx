@@ -47,9 +47,9 @@ export default function SuperAdminDashboard() {
         <>
           {/* Key Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
-            <StatCard title="Total Colleges" value={data?.totalColleges ?? 0} icon={<Building2 className="h-5 w-5" />} />
-            <StatCard title="Registered Students" value={data?.totalStudents ?? 0} icon={<Users className="h-5 w-5" />} />
-            <StatCard title="College Admins" value={data?.totalCollegeAdmins ?? 0} icon={<UserCog className="h-5 w-5" />} />
+            <StatCard title="Organizations" value={data?.totalOrganizations ?? data?.totalColleges ?? 0} icon={<Building2 className="h-5 w-5" />} />
+            <StatCard title="Members" value={data?.totalMembers ?? data?.totalStudents ?? 0} icon={<Users className="h-5 w-5" />} />
+            <StatCard title="Staff" value={data?.totalStaff ?? data?.totalCollegeAdmins ?? 0} icon={<UserCog className="h-5 w-5" />} />
             <StatCard title="Total Reports" value={data?.totalReports ?? 0} icon={<FileText className="h-5 w-5" />} />
             <StatCard title="Emergency Reports" value={data?.emergencyReports ?? 0} icon={<AlertTriangle className="h-5 w-5" />} variant="destructive" />
             <StatCard title="Resolved Cases" value={data?.resolvedReports ?? 0} icon={<CheckCircle2 className="h-5 w-5" />} trend={`${resolveRate}% rate`} variant="success" />
@@ -103,7 +103,7 @@ export default function SuperAdminDashboard() {
           {/* Top Colleges + Category */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl p-5">
-              <h3 className="font-medium mb-4">Top Colleges by Reports</h3>
+              <h3 className="font-medium mb-4">Top organizations by cases</h3>
               <div className="space-y-3">
                 {topColleges.length === 0 && <p className="text-sm text-muted-foreground">No data yet</p>}
                 {topColleges.map((c, i) => (

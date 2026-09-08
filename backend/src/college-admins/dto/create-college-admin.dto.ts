@@ -1,4 +1,5 @@
-import { IsEmail, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import { IsArray, IsEmail, IsEnum, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import { OrgRole } from '@prisma/client';
 
 export class CreateCollegeAdminDto {
   @IsEmail()
@@ -16,6 +17,20 @@ export class CreateCollegeAdminDto {
   @IsString()
   phone?: string;
 
+  @IsOptional()
   @IsUUID()
-  collegeId!: string;
+  collegeId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  organizationId?: string;
+
+  @IsOptional()
+  @IsEnum(OrgRole)
+  orgRole?: OrgRole;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  departmentIds?: string[];
 }

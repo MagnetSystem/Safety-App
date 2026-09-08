@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   LayoutGrid, Building2, Users, UserCog, Search, FileWarning,
-  ScrollText, Bell, Settings, PanelLeftClose, PanelLeftOpen,
+  ScrollText, Bell, Settings, PanelLeftClose, PanelLeftOpen, Layers,
   MoreVertical, ChevronsUpDown, Menu, X, LogOut,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
@@ -17,10 +17,11 @@ interface NavItem {
 
 const generalItems: NavItem[] = [
   { icon: LayoutGrid, label: "Dashboard", to: "/super-admin" },
-  { icon: Building2, label: "Colleges", to: "/super-admin/colleges" },
-  { icon: UserCog, label: "College Admins", to: "/super-admin/college-admins" },
-  { icon: Users, label: "Students", to: "/super-admin/students" },
-  { icon: FileWarning, label: "Reports", to: "/super-admin/reports" },
+  { icon: Building2, label: "Organizations", to: "/super-admin/colleges" },
+  { icon: Layers, label: "Org types", to: "/super-admin/organization-types" },
+  { icon: UserCog, label: "Staff", to: "/super-admin/college-admins" },
+  { icon: Users, label: "Members", to: "/super-admin/students" },
+  { icon: FileWarning, label: "Cases", to: "/super-admin/reports" },
 ];
 
 export default function SuperAdminSidebar() {
@@ -53,7 +54,7 @@ export default function SuperAdminSidebar() {
       <div className={`flex items-center mb-4 ${collapsed && !isMobile ? "justify-center" : "justify-between px-1"}`}>
         {(!collapsed || isMobile) && (
           <span className="text-[11px] font-semibold text-slate-400 tracking-wider uppercase">
-            Super Admin
+            Support
           </span>
         )}
         {isMobile ? (

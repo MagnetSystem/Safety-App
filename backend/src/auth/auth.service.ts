@@ -7,20 +7,23 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import type { JwtSignOptions } from '@nestjs/jwt';
+import { Prisma, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
-import { RegisterStudentDto } from './dto/register-student.dto';
-import { RegisterCollegeDto } from './dto/register-college.dto';
+import { RegisterMemberDto } from './dto/register-member.dto';
+import { RegisterOrganizationDto } from './dto/register-organization.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { MailService } from './mail.service';
 import type { JwtPayload } from './types/jwt-payload.interface';
+import { generateJoinCode, slugCodeFromName } from '../common/codes';
+import { OrganizationTypesService } from '../organization-types/organization-types.service';
 
 const BCRYPT_ROUNDS = 10;
-const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
 
 @Injectable()
 export class AuthService {
@@ -29,119 +32,143 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly mail: MailService,
+    private readonly orgTypes: OrganizationTypesService,
   ) {}
 
-  async registerStudent(dto: RegisterStudentDto) {
-    const college = await this.prisma.college.findUnique({ where: { id: dto.collegeId } });
-    if (!college || college.status !== 'ACTIVE') {
-      throw new BadRequestException('College not found or not active');
-    }
+  async registerMember(dto: RegisterMemberDto) {
+    return this.prisma.bypassRls(async () => {
+      let organizationId: string | null = null;
+      if (dto.joinCode) {
+        const organization = await this.prisma.organization.findUnique({
+          where: { joinCode: dto.joinCode.trim().toUpperCase() },
+        });
+        if (!organization || organization.status !== 'ACTIVE') {
+          throw new BadRequestException('Join code is invalid or the organization is not active');
+        }
+        organizationId = organization.id;
+      }
 
-    const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
-    if (existing) throw new ConflictException('An account with this email already exists');
+      const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
+      if (existing) throw new ConflictException('An account with this email already exists');
 
-    const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
-
-    const user = await this.prisma.user.create({
-      data: {
-        email: dto.email,
-        passwordHash,
-        role: 'STUDENT',
-        student: {
-          create: {
-            name: dto.name,
-            collegeId: dto.collegeId,
-            studentNumber: dto.studentNumber,
-            mobile: dto.mobile,
-            department: dto.department,
-            course: dto.course,
-            year: dto.year,
-            dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : undefined,
-            gender: dto.gender,
-          },
-        },
-      },
-      include: { student: true },
-    });
-
-    return this.issueTokens(user.id, user.email, user.role, dto.collegeId);
-  }
-
-  async registerCollege(dto: RegisterCollegeDto) {
-    // Check for duplicate college code
-    const existingCollege = await this.prisma.college.findUnique({ where: { code: dto.collegeCode } });
-    if (existingCollege) throw new ConflictException('A college with this code already exists');
-
-    // Check for duplicate admin email
-    const existingUser = await this.prisma.user.findUnique({ where: { email: dto.adminEmail } });
-    if (existingUser) throw new ConflictException('An account with this email already exists');
-
-    const passwordHash = await bcrypt.hash(dto.adminPassword, BCRYPT_ROUNDS);
-
-    // Create college + admin in one transaction
-    const result = await this.prisma.$transaction(async (tx) => {
-      const college = await tx.college.create({
+      const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
+      const user = await this.prisma.user.create({
         data: {
-          name: dto.collegeName,
-          code: dto.collegeCode,
-          state: dto.state,
-          district: dto.district,
-          principal: dto.principal,
-          phone: dto.phone,
-          email: dto.collegeEmail,
-          address: dto.address,
-          status: 'ACTIVE',
-        },
-      });
-
-      const user = await tx.user.create({
-        data: {
-          email: dto.adminEmail,
+          email: dto.email,
           passwordHash,
-          role: 'COLLEGE_ADMIN',
-          collegeAdmin: {
+          role: UserRole.MEMBER,
+          member: {
             create: {
-              name: dto.adminName,
-              phone: dto.adminPhone,
-              collegeId: college.id,
+              name: dto.name,
+              organizationId,
+              mobile: dto.mobile,
             },
           },
         },
-        include: { collegeAdmin: true },
       });
 
-      return { college, user };
+      return this.issueTokens(user.id, user.email, user.role, organizationId);
     });
+  }
 
-    return this.issueTokens(
-      result.user.id,
-      result.user.email,
-      result.user.role,
-      result.college.id,
-    );
+  async registerOrganization(dto: RegisterOrganizationDto) {
+    return this.prisma.bypassRls(async () => {
+      const industry = (dto.industry ?? 'EDUCATION').toUpperCase();
+      const catalog = await this.orgTypes.resolve(industry);
+      const typeRow = await this.orgTypes.findTypeRow(industry);
+      const settings = await this.orgTypes.settingsForSlug(industry);
+      const code = dto.organizationCode?.trim() || slugCodeFromName(dto.organizationName);
+      const existingOrg = await this.prisma.organization.findUnique({ where: { code } });
+      if (existingOrg) throw new ConflictException('An organization with this code already exists');
+
+      const existingUser = await this.prisma.user.findUnique({ where: { email: dto.ownerEmail } });
+      if (existingUser) throw new ConflictException('An account with this email already exists');
+
+      const passwordHash = await bcrypt.hash(dto.ownerPassword, BCRYPT_ROUNDS);
+      const joinCode = await this.uniqueJoinCode();
+
+      const result = await this.prisma.$transaction(async (tx) => {
+        const organization = await tx.organization.create({
+          data: {
+            name: dto.organizationName,
+            code,
+            joinCode,
+            industry: catalog.id,
+            organizationTypeId: typeRow?.id,
+            state: dto.state,
+            district: dto.district,
+            contactName: dto.contactName,
+            phone: dto.phone,
+            email: dto.organizationEmail,
+            address: dto.address,
+            settings: settings as unknown as Prisma.InputJsonValue,
+            status: 'ACTIVE',
+          },
+        });
+
+        const user = await tx.user.create({
+          data: {
+            email: dto.ownerEmail,
+            passwordHash,
+            role: UserRole.OWNER,
+            orgStaff: {
+              create: {
+                name: dto.ownerName,
+                phone: dto.ownerPhone,
+                organizationId: organization.id,
+                orgRole: 'OWNER',
+              },
+            },
+          },
+        });
+
+        return { organization, user };
+      });
+
+      const templates = catalog.defaultDepartments;
+      if (templates.length > 0) {
+        await this.prisma.department.createMany({
+          data: templates.map((t, i) => ({
+            organizationId: result.organization.id,
+            name: t.name,
+            slug: t.slug,
+            description: t.description,
+            isDefault: i === 0,
+          })),
+        });
+      }
+
+      return this.issueTokens(
+        result.user.id,
+        result.user.email,
+        result.user.role,
+        result.organization.id,
+      );
+    });
   }
 
   async login(dto: LoginDto) {
-    const user = await this.prisma.user.findUnique({
-      where: { email: dto.email },
-      include: { student: true, collegeAdmin: true },
-    });
-    if (!user) throw new UnauthorizedException('Invalid email or password');
+    return this.prisma.bypassRls(async () => {
+      const user = await this.prisma.user.findUnique({
+        where: { email: dto.email },
+        include: { member: true, orgStaff: true },
+      });
+      if (!user) throw new UnauthorizedException('Invalid email or password');
 
-    const passwordValid = await bcrypt.compare(dto.password, user.passwordHash);
-    if (!passwordValid) throw new UnauthorizedException('Invalid email or password');
+      const passwordValid = await bcrypt.compare(dto.password, user.passwordHash);
+      if (!passwordValid) throw new UnauthorizedException('Invalid email or password');
+      if (!user.isActive) throw new UnauthorizedException('This account has been deactivated');
 
-    if (!user.isActive) throw new UnauthorizedException('This account has been deactivated');
-
-    const collegeId = user.student?.collegeId ?? user.collegeAdmin?.collegeId ?? null;
-    if (collegeId) {
-      const college = await this.prisma.college.findUnique({ where: { id: collegeId } });
-      if (!college || college.status !== 'ACTIVE') {
-        throw new UnauthorizedException('This college account has been suspended');
+      const organizationId = user.member?.organizationId ?? user.orgStaff?.organizationId ?? null;
+      if (organizationId) {
+        const organization = await this.prisma.organization.findUnique({ where: { id: organizationId } });
+        if (!organization || organization.status !== 'ACTIVE') {
+          throw new UnauthorizedException('This organization account has been suspended');
+        }
       }
-    }
 
-    return this.issueTokens(user.id, user.email, user.role, collegeId);
+      return this.issueTokens(user.id, user.email, user.role, organizationId);
+    });
   }
 
   async refresh(refreshToken: string) {
@@ -154,18 +181,15 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
-    const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+    const user = await this.prisma.bypassRls(() => this.prisma.user.findUnique({ where: { id: payload.sub } }));
     if (!user || !user.isActive) throw new UnauthorizedException('Account no longer active');
 
-    return this.issueTokens(user.id, user.email, user.role, payload.collegeId);
+    const organizationId = payload.organizationId ?? payload.collegeId ?? null;
+    return this.issueTokens(user.id, user.email, user.role, organizationId);
   }
 
-  /**
-   * Always resolves the same way whether or not the email exists — never
-   * reveal which addresses have accounts.
-   */
   async forgotPassword(dto: ForgotPasswordDto) {
-    const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const user = await this.prisma.bypassRls(() => this.prisma.user.findUnique({ where: { email: dto.email } }));
     if (user && user.isActive) {
       const rawToken = randomBytes(32).toString('hex');
       const tokenHash = createHash('sha256').update(rawToken).digest('hex');
@@ -181,7 +205,7 @@ export class AuthService {
       const link = this.buildResetLink(user.role, rawToken);
       await this.mail.send(
         user.email,
-        'Reset your Campus Safety password',
+        'Reset your Safety Platform password',
         `We received a request to reset your password.\n\nOpen this link to choose a new one (valid for 1 hour):\n${link}\n\nIf you didn't ask for this, you can ignore this email.`,
       );
     }
@@ -189,7 +213,7 @@ export class AuthService {
   }
 
   private buildResetLink(role: JwtPayload['role'], token: string): string {
-    if (role === 'STUDENT') {
+    if (role === UserRole.MEMBER || role === UserRole.GUARDIAN) {
       const scheme = this.configService.get<string>('STUDENT_APP_SCHEME') ?? 'studentapp';
       return `${scheme}://reset-password?token=${token}`;
     }
@@ -199,7 +223,9 @@ export class AuthService {
 
   async resetPassword(dto: ResetPasswordDto) {
     const tokenHash = createHash('sha256').update(dto.token).digest('hex');
-    const record = await this.prisma.passwordResetToken.findUnique({ where: { tokenHash } });
+    const record = await this.prisma.bypassRls(() =>
+      this.prisma.passwordResetToken.findUnique({ where: { tokenHash } }),
+    );
 
     if (!record || record.usedAt || record.expiresAt < new Date()) {
       throw new BadRequestException('This reset link is invalid or has expired.');
@@ -212,7 +238,6 @@ export class AuthService {
         where: { id: record.id },
         data: { usedAt: new Date() },
       }),
-      // Invalidate any other outstanding tokens for this user.
       this.prisma.passwordResetToken.deleteMany({
         where: { userId: record.userId, usedAt: null, id: { not: record.id } },
       }),
@@ -240,19 +265,92 @@ export class AuthService {
         role: true,
         isActive: true,
         createdAt: true,
-        student: true,
-        collegeAdmin: { include: { college: true } },
+        member: { include: { organization: { select: { id: true, name: true, code: true, industry: true, joinCode: false, settings: true } } } },
+        orgStaff: { include: { organization: true } },
+        guardianLinks: {
+          where: { status: 'ACTIVE' },
+          select: {
+            id: true,
+            member: { select: { id: true, name: true } },
+          },
+        },
       },
     });
+  }
+
+  async enterOrganizationAsSupport(userId: string, organizationId: string, ipAddress?: string) {
+    const organization = await this.prisma.bypassRls(() =>
+      this.prisma.organization.findUnique({ where: { id: organizationId } }),
+    );
+    if (!organization) throw new BadRequestException('Organization not found');
+
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (user.role !== UserRole.SUPPORT) throw new UnauthorizedException();
+
+    await this.prisma.auditLog.create({
+      data: {
+        actorId: userId,
+        organizationId,
+        action: 'SUPPORT_ORG_ACCESS',
+        entityType: 'Organization',
+        entityId: organizationId,
+        metadata: { reason: 'support_enter' },
+        ipAddress: ipAddress ?? null,
+      },
+    });
+
+    return this.issueTokens(user.id, user.email, user.role, organizationId);
+  }
+
+  async leaveOrganizationAsSupport(userId: string) {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (user.role !== UserRole.SUPPORT) throw new UnauthorizedException();
+    await this.prisma.auditLog.create({
+      data: {
+        actorId: userId,
+        action: 'SUPPORT_ORG_LEAVE',
+        entityType: 'Organization',
+        metadata: { reason: 'support_leave' },
+      },
+    });
+    return this.issueTokens(user.id, user.email, user.role, null);
+  }
+
+  async updateProfile(userId: string, dto: { name?: string; phone?: string }) {
+    const staff = await this.prisma.orgStaff.findUnique({ where: { userId } });
+    if (!staff) return { success: true };
+    await this.prisma.orgStaff.update({
+      where: { userId },
+      data: {
+        ...(dto.name !== undefined ? { name: dto.name } : {}),
+        ...(dto.phone !== undefined ? { phone: dto.phone } : {}),
+      },
+    });
+    return this.me(userId);
+  }
+
+  private async uniqueJoinCode(): Promise<string> {
+    for (let i = 0; i < 8; i++) {
+      const code = generateJoinCode(8);
+      const taken = await this.prisma.organization.findUnique({ where: { joinCode: code } });
+      if (!taken) return code;
+    }
+    return generateJoinCode(10);
   }
 
   private async issueTokens(
     userId: string,
     email: string,
     role: JwtPayload['role'],
-    collegeId: string | null,
+    organizationId: string | null,
   ) {
-    const payload: JwtPayload = { sub: userId, email, role, collegeId };
+    const payload: JwtPayload = {
+      sub: userId,
+      email,
+      role,
+      organizationId,
+      collegeId: organizationId,
+    };
 
     const accessToken = await this.jwtService.signAsync(payload, {
       secret: this.configService.get<string>('JWT_ACCESS_SECRET'),
@@ -266,7 +364,7 @@ export class AuthService {
     return {
       accessToken,
       refreshToken,
-      user: { id: userId, email, role, collegeId },
+      user: { id: userId, email, role, organizationId, collegeId: organizationId },
     };
   }
 }

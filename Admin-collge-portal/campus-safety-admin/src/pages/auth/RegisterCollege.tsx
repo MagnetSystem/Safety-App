@@ -1,14 +1,15 @@
-﻿import { useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import {
   Building2, User, ChevronRight, ChevronLeft,
   Check, Loader2, Eye, EyeOff, Shield,
 } from "lucide-react";
-import { registerCollege, type RegisterCollegeInput } from "../../services/authService";
+import { registerOrganization } from "../../services/authService";
+import { getIndustryCatalog, type IndustryCatalog } from "../../services/departmentsService";
 
 const STEPS = [
-  { id: 1, label: "College Details", icon: "Building2" },
-  { id: 2, label: "Admin Account",   icon: "User" },
+  { id: 1, label: "Organization", icon: "Building2" },
+  { id: 2, label: "Owner account",   icon: "User" },
   { id: 3, label: "All Set!",        icon: "Check" },
 ];
 
@@ -98,6 +99,8 @@ export default function RegisterCollege() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const [types, setTypes] = useState<IndustryCatalog[]>([]);
+  const [industry, setIndustry] = useState("EDUCATION");
   const [college, setCollege] = useState({
     collegeName: "", collegeCode: "", state: "", district: "",
     principal: "", phone: "", collegeEmail: "", address: "",
@@ -105,6 +108,15 @@ export default function RegisterCollege() {
   const [admin, setAdmin] = useState({
     adminName: "", adminEmail: "", adminPassword: "", adminPhone: "",
   });
+
+  useEffect(() => {
+    getIndustryCatalog()
+      .then((list) => {
+        setTypes(list);
+        if (list[0] && !list.find((t) => t.id === industry)) setIndustry(list[0].id);
+      })
+      .catch(() => undefined);
+  }, []);
 
   const setC = (k: keyof typeof college) => (v: string) => setCollege((p) => ({ ...p, [k]: v }));
   const setA = (k: keyof typeof admin) => (v: string) => setAdmin((p) => ({ ...p, [k]: v }));
@@ -119,12 +131,21 @@ export default function RegisterCollege() {
     setError("");
     setLoading(true);
     try {
-      const payload: RegisterCollegeInput = {
-        ...college,
-        ...admin,
-        collegeCode: college.collegeCode.toUpperCase().trim(),
-      };
-      const result = await registerCollege(payload);
+      const result = await registerOrganization({
+        organizationName: college.collegeName,
+        organizationCode: college.collegeCode.toUpperCase().trim(),
+        industry,
+        state: college.state,
+        district: college.district,
+        contactName: college.principal,
+        phone: college.phone,
+        organizationEmail: college.collegeEmail,
+        address: college.address,
+        ownerName: admin.adminName,
+        ownerEmail: admin.adminEmail,
+        ownerPassword: admin.adminPassword,
+        ownerPhone: admin.adminPhone,
+      });
       localStorage.setItem("accessToken", result.accessToken);
       localStorage.setItem("refreshToken", result.refreshToken);
       localStorage.setItem("campus_onboarding", "true");
@@ -143,9 +164,9 @@ export default function RegisterCollege() {
         <div className="inline-flex items-center justify-center h-12 w-12 rounded-xl bg-primary/15 text-primary mb-3">
           <Building2 size={24} />
         </div>
-        <h1 className="text-xl font-semibold text-foreground">Register Your College</h1>
+        <h1 className="text-xl font-semibold text-foreground">Create your organization</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Set up your institution on Campus Safety in under 2 minutes
+          Education, workplace or care — the forms adapt to what you choose
         </p>
       </div>
 
@@ -161,8 +182,31 @@ export default function RegisterCollege() {
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
-              <Field label="College Name" required value={college.collegeName} onChange={setC("collegeName")}
-                placeholder="Government Engineering College" />
+              <label className="block text-sm font-medium text-foreground mb-1.5">Industry</label>
+              <select
+                value={industry}
+                onChange={(e) => setIndustry(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-lg bg-background border border-border text-sm"
+              >
+                {types.map((t) => (
+                  <option key={t.id} value={t.id}>{t.label}</option>
+                ))}
+              </select>
+              {types.find((t) => t.id === industry)?.blurb && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  {types.find((t) => t.id === industry)?.blurb}
+                </p>
+              )}
+              {(types.find((t) => t.id === industry)?.memberFields?.length ?? 0) > 0 && (
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Members will be asked: {types.find((t) => t.id === industry)!.memberFields.map((f) => f.label).slice(0, 8).join(', ')}
+                  {(types.find((t) => t.id === industry)!.memberFields.length > 8) ? '…' : ''}
+                </p>
+              )}
+            </div>
+            <div className="col-span-2">
+              <Field label="Organization name" required value={college.collegeName} onChange={setC("collegeName")}
+                placeholder="Acme College or Riverside Care" />
             </div>
             <Field label="College Code" required value={college.collegeCode} onChange={setC("collegeCode")}
               placeholder="GEC-TN" hint="Short unique code e.g. GEC-TN" />

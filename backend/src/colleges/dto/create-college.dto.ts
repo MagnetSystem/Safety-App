@@ -32,4 +32,8 @@ export class CreateCollegeDto {
   @IsOptional()
   @IsEmail()
   email?: string;
+
+  @IsOptional()
+  @IsString()
+  industry?: string;
 }

@@ -9,21 +9,42 @@ import { DashboardService } from './dashboard.service';
 export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
+  @Get('member')
+  @Roles(UserRole.MEMBER)
+  member(@CurrentUser() user: AuthenticatedUser) {
+    return this.dashboardService.forMember(user);
+  }
+
+  /** @deprecated Use /dashboard/member */
   @Get('student')
-  @Roles(UserRole.STUDENT)
+  @Roles(UserRole.MEMBER)
   student(@CurrentUser() user: AuthenticatedUser) {
-    return this.dashboardService.forStudent(user);
+    return this.dashboardService.forMember(user);
   }
 
+  @Get('staff')
+  @Roles(UserRole.STAFF)
+  staff(@CurrentUser() user: AuthenticatedUser) {
+    return this.dashboardService.forStaff(user);
+  }
+
+  /** @deprecated Use /dashboard/staff */
   @Get('college-admin')
-  @Roles(UserRole.COLLEGE_ADMIN)
+  @Roles(UserRole.STAFF)
   collegeAdmin(@CurrentUser() user: AuthenticatedUser) {
-    return this.dashboardService.forCollegeAdmin(user);
+    return this.dashboardService.forStaff(user);
   }
 
+  @Get('support')
+  @Roles(UserRole.SUPPORT)
+  support() {
+    return this.dashboardService.forSupport();
+  }
+
+  /** @deprecated Use /dashboard/support */
   @Get('super-admin')
-  @Roles(UserRole.SUPER_ADMIN)
+  @Roles(UserRole.SUPPORT)
   superAdmin() {
-    return this.dashboardService.forSuperAdmin();
+    return this.dashboardService.forSupport();
   }
 }

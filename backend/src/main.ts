@@ -12,6 +12,9 @@ async function bootstrap() {
   const isProduction = process.env.NODE_ENV === 'production';
 
   app.use(helmet());
+  const httpAdapter = app.getHttpAdapter();
+  const instance = httpAdapter.getInstance?.();
+  if (instance?.set) instance.set('trust proxy', 1);
   app.setGlobalPrefix('api');
   app.enableShutdownHooks();
 
@@ -40,8 +43,8 @@ async function bootstrap() {
 
   if (!isProduction) {
     const swaggerConfig = new DocumentBuilder()
-      .setTitle('Campus Safety API')
-      .setDescription('Anti-Ragging Reporting System — backend API')
+      .setTitle('Safety Platform API')
+      .setDescription('Multi-tenant safety reporting platform — backend API')
       .setVersion('1.0')
       .addBearerAuth()
       .build();
@@ -52,7 +55,7 @@ async function bootstrap() {
   const port = process.env.PORT ?? 3000;
   await app.listen(port, '0.0.0.0');
   // eslint-disable-next-line no-console
-  console.log(`Campus Safety API listening on port ${port} (prefix /api)`);
+  console.log(`Safety Platform API listening on port ${port} (prefix /api)`);
   if (!isProduction) {
     // eslint-disable-next-line no-console
     console.log(`Swagger docs at http://localhost:${port}/api/docs`);

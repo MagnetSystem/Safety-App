@@ -10,58 +10,92 @@ datasource db {
 
 /// Shared login/identity record across all roles.
 model User {
-  id                 String              @id @default(uuid())
-  email              String              @unique
+  id                 String               @id @default(uuid())
+  email              String               @unique
   passwordHash       String
   role               UserRole
-  isActive           Boolean             @default(true)
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  isActive           Boolean              @default(true)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
   auditLogs          AuditLog[]
-  collegeAdmin       CollegeAdmin?
-  uploadedEvidence   ComplaintEvidence[]
-  complaintMessages  ComplaintMessage[]
-  complaintTimelines ComplaintTimeline[]
+  orgStaff           OrgStaff?
+  uploadedEvidence   IncidentEvidence[]
+  incidentMessages   IncidentMessage[]
+  incidentTimelines  IncidentTimeline[]
+  assignedIncidents  Incident[]           @relation("IncidentAssignee")
   notifications      Notification[]
   passwordResets     PasswordResetToken[]
   pushTokens         PushToken[]
-  student            Student?
+  member             Member?
+  guardianLinks      GuardianLink[]       @relation("GuardianUser")
 
   @@index([role])
   @@map("users")
 }
 
-/// One record per college. Scopes all student/complaint data.
-model College {
-  id         String         @id @default(uuid())
+/// One private tenant. Formerly "College".
+model Organization {
+  id         String               @id @default(uuid())
   name       String
-  code       String         @unique
+  code       String               @unique
+  joinCode             String   @unique
+  industry             String   @default("EDUCATION")
+  organizationTypeId   String?
   address    String?
   state      String?
   district   String?
-  principal  String?
+  contactName String?
   phone      String?
   email      String?
-  status     CollegeStatus  @default(ACTIVE)
-  createdAt  DateTime       @default(now())
-  updatedAt  DateTime       @updatedAt
-  auditLogs  AuditLog[]
-  admins     CollegeAdmin[]
-  complaints Complaint[]
-  students   Student[]
+  logoUrl    String?
+  /// Branding, feature flags, report categories, and profile-field schema.
+  settings   Json                 @default("{}")
+  status     OrganizationStatus   @default(ACTIVE)
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+  auditLogs   AuditLog[]
+  staff       OrgStaff[]
+  incidents   Incident[]
+  members     Member[]
+  departments      Department[]
+  organizationType OrganizationType? @relation(fields: [organizationTypeId], references: [id], onDelete: SetNull)
 
   @@index([status])
-  @@map("colleges")
+  @@index([industry])
+  @@index([organizationTypeId])
+  @@map("organizations")
 }
 
-/// Full student profile: personal, academic, contact, emergency info.
-model Student {
-  id                    String      @id @default(uuid())
-  userId                String      @unique
-  collegeId             String
+/// Support-defined vertical. Built-ins are seeded; new client types are created here.
+model OrganizationType {
+  id                  String         @id @default(uuid())
+  slug                String         @unique
+  label               String
+  blurb               String         @default("")
+  isSystem            Boolean        @default(false)
+  isActive            Boolean        @default(true)
+  features            Json           @default("{}")
+  categories          Json           @default("[]")
+  defaultDepartments  Json           @default("[]")
+  orgSetupFields      Json           @default("[]")
+  memberFields        Json           @default("[]")
+  createdById         String?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  organizations       Organization[]
+
+  @@index([isActive])
+  @@map("organization_types")
+}
+
+/// Everyday person the platform protects. Organization is optional (standalone SOS).
+model Member {
+  id                    String         @id @default(uuid())
+  userId                String         @unique
+  organizationId        String?
   name                  String
   photoUrl              String?
-  studentNumber         String?
+  memberNumber          String?
   dateOfBirth           DateTime?
   gender                String?
   department            String?
@@ -69,7 +103,7 @@ model Student {
   semester              String?
   year                  Int?
   section               String?
-  isHosteler            Boolean?    @default(false)
+  isHosteler            Boolean?       @default(false)
   mobile                String?
   guardianName          String?
   guardianPhone         String?
@@ -82,120 +116,179 @@ model Student {
   medicalConditions     String?
   allergies             String?
   disability            String?
-  createdAt             DateTime    @default(now())
-  updatedAt             DateTime    @updatedAt
-  complaints            Complaint[]
-  college               College     @relation(fields: [collegeId], references: [id])
-  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Industry-specific fields that are not first-class columns.
+  profile               Json           @default("{}")
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  incidents             Incident[]
+  guardianLinks         GuardianLink[]
+  assignedDepartmentId  String?
+  assignedDepartment    Department?    @relation(fields: [assignedDepartmentId], references: [id], onDelete: SetNull)
+  organization          Organization?  @relation(fields: [organizationId], references: [id])
+  user                  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([collegeId])
-  @@index([studentNumber])
-  @@map("students")
+  @@index([organizationId])
+  @@index([memberNumber])
+  @@index([assignedDepartmentId])
+  @@map("members")
 }
 
-/// Admin accounts, each linked to exactly one college.
-model CollegeAdmin {
-  id        String   @id @default(uuid())
-  userId    String   @unique
-  collegeId String
-  name      String
-  phone     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  college   College  @relation(fields: [collegeId], references: [id])
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+/// Owner / Admin / Staff membership in one organization.
+model OrgStaff {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  organizationId String
+  orgRole        OrgRole  @default(ADMIN)
+  name           String
+  phone          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  organization   Organization     @relation(fields: [organizationId], references: [id])
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  departments    DepartmentStaff[]
 
-  @@index([collegeId])
-  @@map("college_admins")
+  @@index([organizationId])
+  @@index([organizationId, orgRole])
+  @@map("org_staff")
 }
 
-/// The core report record.
-model Complaint {
-  id                       String              @id @default(uuid())
-  code                     String              @unique
-  collegeId                String
-  studentId                String?
-  type                     ReportType
-  category                 IncidentCategory
-  status                   ComplaintStatus     @default(SUBMITTED)
-  priority                 ComplaintPriority   @default(NORMAL)
-  description              String
-  incidentDate             DateTime?
-  location                 String?
-  suspectedStudents        String?
-  witnesses                String?
-  gpsLat                   Float?
-  gpsLng                   Float?
-  gpsAccuracy              Float?
-  deviceInfo               String?
-  isAnonymous              Boolean             @default(false)
-  assignedCommitteeUserIds String[]            @default([])
-  createdAt                DateTime            @default(now())
-  updatedAt                DateTime            @updatedAt
-  resolutionReport         String?
-  evidence                 ComplaintEvidence[]
-  messages                 ComplaintMessage[]
-  timeline                 ComplaintTimeline[]
-  college                  College             @relation(fields: [collegeId], references: [id])
-  student                  Student?            @relation(fields: [studentId], references: [id])
+/// Optional routing unit inside an organization. Members have one; staff may have many.
+model Department {
+  id             String            @id @default(uuid())
+  organizationId String
+  name           String
+  slug           String
+  description    String?
+  isDefault      Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members        Member[]
+  staff          DepartmentStaff[]
+  incidents      Incident[]
 
-  @@index([collegeId, status])
-  @@index([collegeId, createdAt])
-  @@index([studentId])
-  @@map("complaints")
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+  @@map("departments")
 }
 
-/// Uploaded files linked to a specific complaint.
-model ComplaintEvidence {
-  id           String       @id @default(uuid())
-  complaintId  String
-  type         EvidenceType
-  storagePath  String
-  fileName     String
-  mimeType     String?
-  sizeBytes    Int?
-  uploadedById String?
-  createdAt    DateTime     @default(now())
-  complaint    Complaint    @relation(fields: [complaintId], references: [id], onDelete: Cascade)
-  uploadedBy   User?        @relation(fields: [uploadedById], references: [id])
+model DepartmentStaff {
+  departmentId String
+  orgStaffId   String
+  createdAt    DateTime    @default(now())
+  department   Department  @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  orgStaff     OrgStaff    @relation(fields: [orgStaffId], references: [id], onDelete: Cascade)
 
-  @@index([complaintId])
-  @@map("complaint_evidence")
+  @@id([departmentId, orgStaffId])
+  @@index([orgStaffId])
+  @@map("department_staff")
 }
 
-/// Two-way messages between the reporting student and the committee.
-/// Used mainly to resolve MORE_INFO_REQUESTED, and for the student's
-/// "I'm safe now" follow-up on an emergency.
-model ComplaintMessage {
+/// Privacy-respecting family link. Guardians are alerted only on Emergency SOS.
+model GuardianLink {
+  id                  String             @id @default(uuid())
+  memberId            String
+  guardianUserId      String?
+  inviteCodeHash      String?            @unique
+  inviteCodeExpiresAt DateTime?
+  status              GuardianLinkStatus @default(PENDING)
+  createdAt           DateTime           @default(now())
+  acceptedAt          DateTime?
+  member              Member             @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  guardian            User?              @relation("GuardianUser", fields: [guardianUserId], references: [id], onDelete: SetNull)
+
+  @@index([memberId, status])
+  @@index([guardianUserId])
+  @@map("guardian_links")
+}
+
+/// A filed report / case. Organization is null for standalone SOS.
+model Incident {
+  id                String            @id @default(uuid())
+  code              String            @unique
+  organizationId    String?
+  memberId          String?
+  assignedToUserId  String?
+  departmentId      String?
+  type              ReportType
+  category          String
+  status            IncidentStatus    @default(SUBMITTED)
+  priority          IncidentPriority  @default(NORMAL)
+  description       String
+  incidentDate      DateTime?
+  location          String?
+  suspectedPeople   String?
+  witnesses         String?
+  gpsLat            Float?
+  gpsLng            Float?
+  gpsAccuracy       Float?
+  deviceInfo        String?
+  isAnonymous       Boolean           @default(false)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  resolutionReport  String?
+  evidence          IncidentEvidence[]
+  messages          IncidentMessage[]
+  timeline          IncidentTimeline[]
+  organization      Organization?     @relation(fields: [organizationId], references: [id])
+  member            Member?           @relation(fields: [memberId], references: [id])
+  assignedTo        User?             @relation("IncidentAssignee", fields: [assignedToUserId], references: [id])
+  department        Department?       @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, departmentId, status])
+  @@index([memberId])
+  @@index([assignedToUserId])
+  @@index([type, status])
+  @@map("incidents")
+}
+
+model IncidentEvidence {
+  id            String       @id @default(uuid())
+  incidentId    String
+  type          EvidenceType
+  storagePath   String
+  fileName      String
+  mimeType      String?
+  sizeBytes     Int?
+  uploadedById  String?
+  createdAt     DateTime     @default(now())
+  incident      Incident     @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  uploadedBy    User?        @relation(fields: [uploadedById], references: [id])
+
+  @@index([incidentId])
+  @@map("incident_evidence")
+}
+
+model IncidentMessage {
   id          String    @id @default(uuid())
-  complaintId String
+  incidentId  String
   authorId    String?
   authorRole  UserRole
   body        String
   createdAt   DateTime  @default(now())
   author      User?     @relation(fields: [authorId], references: [id])
-  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  incident    Incident  @relation(fields: [incidentId], references: [id], onDelete: Cascade)
 
-  @@index([complaintId, createdAt])
-  @@map("complaint_messages")
+  @@index([incidentId, createdAt])
+  @@map("incident_messages")
 }
 
-/// Step-by-step history of a complaint's workflow.
-model ComplaintTimeline {
-  id          String          @id @default(uuid())
-  complaintId String
-  status      ComplaintStatus
+model IncidentTimeline {
+  id          String         @id @default(uuid())
+  incidentId  String
+  status      IncidentStatus
   note        String?
   actorId     String?
-  createdAt   DateTime        @default(now())
-  actor       User?           @relation(fields: [actorId], references: [id])
-  complaint   Complaint       @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  createdAt   DateTime       @default(now())
+  actor       User?          @relation(fields: [actorId], references: [id])
+  incident    Incident       @relation(fields: [incidentId], references: [id], onDelete: Cascade)
 
-  @@index([complaintId])
-  @@map("complaint_timeline")
+  @@index([incidentId])
+  @@map("incident_timeline")
 }
 
-/// Queued and sent notifications per user.
 model Notification {
   id        String           @id @default(uuid())
   userId    String
@@ -212,7 +305,6 @@ model Notification {
   @@map("notifications")
 }
 
-/// Single-use password reset tokens. Only the hash is stored.
 model PasswordResetToken {
   id        String    @id @default(uuid())
   userId    String
@@ -226,8 +318,6 @@ model PasswordResetToken {
   @@map("password_reset_tokens")
 }
 
-/// Expo push tokens, one row per device. Used to deliver notifications
-/// outside the app.
 model PushToken {
   id        String   @id @default(uuid())
   userId    String
@@ -241,34 +331,49 @@ model PushToken {
   @@map("push_tokens")
 }
 
-/// Immutable record of sensitive actions across the platform.
 model AuditLog {
-  id         String   @id @default(uuid())
-  actorId    String?
-  collegeId  String?
-  action     String
-  entityType String
-  entityId   String?
-  metadata   Json?
-  ipAddress  String?
-  createdAt  DateTime @default(now())
-  actor      User?    @relation(fields: [actorId], references: [id])
-  college    College? @relation(fields: [collegeId], references: [id])
+  id             String        @id @default(uuid())
+  actorId        String?
+  organizationId String?
+  action         String
+  entityType     String
+  entityId       String?
+  metadata       Json?
+  ipAddress      String?
+  createdAt      DateTime      @default(now())
+  actor          User?         @relation(fields: [actorId], references: [id])
+  organization   Organization? @relation(fields: [organizationId], references: [id])
 
-  @@index([collegeId, createdAt])
+  @@index([organizationId, createdAt])
   @@index([entityType, entityId])
+  @@index([action, createdAt])
   @@map("audit_logs")
 }
 
 enum UserRole {
-  STUDENT
-  COLLEGE_ADMIN
-  SUPER_ADMIN
+  MEMBER
+  GUARDIAN
+  STAFF
+  ADMIN
+  OWNER
+  SUPPORT
 }
 
-enum CollegeStatus {
+enum OrgRole {
+  OWNER
+  ADMIN
+  STAFF
+}
+
+enum OrganizationStatus {
   ACTIVE
   SUSPENDED
+}
+
+enum GuardianLinkStatus {
+  PENDING
+  ACTIVE
+  REVOKED
 }
 
 enum ReportType {
@@ -277,20 +382,7 @@ enum ReportType {
   ANONYMOUS
 }
 
-enum IncidentCategory {
-  PHYSICAL_RAGGING
-  VERBAL_ABUSE
-  MENTAL_HARASSMENT
-  THREAT
-  HOSTEL_RAGGING
-  CLASSROOM_RAGGING
-  CYBER_BULLYING
-  MONEY_EXTORTION
-  SEXUAL_HARASSMENT
-  OTHER
-}
-
-enum ComplaintStatus {
+enum IncidentStatus {
   SUBMITTED
   UNDER_REVIEW
   INVESTIGATING
@@ -299,7 +391,7 @@ enum ComplaintStatus {
   CLOSED
 }
 
-enum ComplaintPriority {
+enum IncidentPriority {
   CRITICAL
   HIGH
   NORMAL
@@ -321,7 +413,8 @@ enum NotificationType {
   NEW_EMERGENCY_REPORT
   NEW_COMPLAINT
   NEW_EVIDENCE_UPLOADED
-  NEW_MESSAGE
   STATUS_CHANGED
   GENERIC
+  NEW_MESSAGE
+  GUARDIAN_EMERGENCY
 }
