@@ -205,15 +205,35 @@ export class OrganizationsService {
     return updated;
   }
 
-  async rotateJoinCode(id: string) {
-    await this.findOne(id);
-    const updated = await this.prisma.organization.update({
+  async getJoinCode(id: string) {
+    const organization = await this.prisma.organization.findUnique({
       where: { id },
-      data: { joinCode: generateJoinCode(8) },
       select: { id: true, joinCode: true },
     });
-    await this.cache.invalidateOrg(id);
-    return updated;
+    if (!organization) throw new NotFoundException('Organization not found');
+    return organization;
+  }
+
+  async rotateJoinCode(id: string) {
+    const existing = await this.prisma.organization.findUnique({ where: { id }, select: { id: true } });
+    if (!existing) throw new NotFoundException('Organization not found');
+
+    for (let i = 0; i < 8; i++) {
+      const joinCode = generateJoinCode(i < 6 ? 8 : 10);
+      try {
+        const updated = await this.prisma.organization.update({
+          where: { id },
+          data: { joinCode },
+          select: { id: true, joinCode: true },
+        });
+        await this.cache.invalidateOrg(id);
+        return updated;
+      } catch (err) {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') continue;
+        throw err;
+      }
+    }
+    throw new ConflictException('Could not generate a unique access code. Try again.');
   }
 
   async updateStatus(id: string, dto: UpdateOrganizationStatusDto) {

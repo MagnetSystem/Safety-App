@@ -44,6 +44,11 @@ export const updateMyOrgSettings = async (settings: unknown) => {
   return data;
 };
 
+export const getJoinCode = async () => {
+  const { data } = await api.get<{ id: string; joinCode: string }>('/organizations/me/join-code');
+  return data;
+};
+
 export const rotateJoinCode = async () => {
   const { data } = await api.post<{ id: string; joinCode: string }>('/organizations/me/join-code');
   return data;

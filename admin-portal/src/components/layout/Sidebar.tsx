@@ -15,6 +15,7 @@ import {
   Building,
   Mail,
   User as UserIcon,
+  UserCog,
   Settings,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
@@ -48,6 +49,7 @@ export default function Sidebar() {
     ...(user?.role === "staff"
       ? []
       : [
+          { icon: UserCog, label: "Team", to: "/team" },
           { icon: Users, label: "Members", to: "/members" },
           { icon: Building, label: "Departments", to: "/departments" },
         ]),

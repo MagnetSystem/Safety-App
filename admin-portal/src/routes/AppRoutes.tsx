@@ -23,6 +23,7 @@ const Onboarding = lazy(() => import('../pages/onboarding/Onboarding'));
 const Departments = lazy(() => import('../pages/departments/Departments'));
 const OrganizationTypes = lazy(() => import('../pages/super-admin/OrganizationTypes'));
 const Settings = lazy(() => import('../pages/settings/Settings'));
+const Team = lazy(() => import('../pages/team/Team'));
 const SupportSettings = lazy(() => import('../pages/super-admin/SupportSettings'));
 
 function ProtectedRoute({ children, portal }: { children: React.ReactNode; portal: 'org' | 'support' }) {
@@ -86,6 +87,8 @@ const AppRoutes = () => {
         <Route path="reports/:id" element={<ReportDetail />} />
         <Route path="members" element={<Members />} />
         <Route path="students" element={<Navigate to="/members" replace />} />
+        <Route path="team" element={<Team />} />
+        <Route path="staff" element={<Navigate to="/team" replace />} />
         <Route path="departments" element={<Departments />} />
         <Route path="search" element={<Search />} />
         <Route path="notifications" element={<Notifications />} />

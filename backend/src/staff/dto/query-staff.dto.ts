@@ -5,4 +5,8 @@ export class QueryStaffDto extends PaginationDto {
   @IsOptional()
   @IsUUID()
   collegeId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  organizationId?: string;
 }

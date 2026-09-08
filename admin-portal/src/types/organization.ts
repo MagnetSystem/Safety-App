@@ -37,15 +37,19 @@ export interface Organization {
   _count?: { members?: number; staff?: number; incidents?: number; students?: number; admins?: number; complaints?: number };
 }
 
+export type OrgRole = 'OWNER' | 'ADMIN' | 'STAFF';
+
 export interface StaffMember {
   id: string;
   name: string;
   phone: string | null;
+  orgRole?: OrgRole;
   organizationId?: string;
   collegeId?: string;
   organization?: { id: string; name: string; code: string };
   college?: { id: string; name: string; code: string };
-  user: { id: string; email: string; isActive: boolean; createdAt: string };
+  user: { id: string; email: string; isActive: boolean; createdAt: string; role?: string };
+  departments?: { department: { id: string; name: string; slug: string } }[];
 }
 
 /** @deprecated Use Member */

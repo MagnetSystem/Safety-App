@@ -3,6 +3,7 @@ import { Loader2 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { changePassword, updateMyProfile } from "../../services/authService";
 import {
+  getJoinCode,
   getMyOrganization,
   rotateJoinCode,
   updateMyOrgSettings,
@@ -250,37 +251,87 @@ function FeaturesPanel() {
 function AccessPanel() {
   const [joinCode, setJoinCode] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    getMyOrganization().then((org) => setJoinCode(org.joinCode ?? "")).catch(() => undefined);
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const res = await getJoinCode();
+        if (!cancelled) setJoinCode((res.joinCode ?? "").toUpperCase());
+      } catch {
+        try {
+          const org = await getMyOrganization();
+          if (!cancelled) setJoinCode((org.joinCode ?? "").toUpperCase());
+        } catch {
+          if (!cancelled) setError("Could not load the join code.");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const rotate = async () => {
-    if (!window.confirm("The old code will stop working immediately.")) return;
+    setError("");
+    if (joinCode && !window.confirm("The old code will stop working immediately. Generate a new one?")) return;
     setBusy(true);
     try {
       const res = await rotateJoinCode();
-      setJoinCode(res.joinCode);
+      const next = (res.joinCode ?? "").toUpperCase();
+      if (!next) {
+        setError("The server did not return an access code. Try again.");
+        return;
+      }
+      setJoinCode(next);
+    } catch (err: any) {
+      setError(err?.response?.data?.message ?? "Could not generate the access code.");
     } finally {
       setBusy(false);
     }
   };
 
+  const copy = async () => {
+    if (!joinCode) return;
+    await navigator.clipboard.writeText(joinCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
   return (
     <div className="surface-card p-5 space-y-4 max-w-xl">
-      <p className="text-sm text-slate-500">Members enter this code in the app to join your organization.</p>
+      <p className="text-sm text-slate-500">
+        Members enter this access code in the app to join your organization.
+      </p>
+      {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-slate-950 text-white font-mono text-lg tracking-[0.25em]">
-        {joinCode || "--------"}
+        {loading ? (
+          <span className="text-sm tracking-normal font-sans text-slate-400">Loading…</span>
+        ) : (
+          joinCode || "--------"
+        )}
         <button
           type="button"
-          className="text-xs tracking-normal font-sans text-teal-300"
-          onClick={() => joinCode && navigator.clipboard.writeText(joinCode)}
+          className="text-xs tracking-normal font-sans text-teal-300 disabled:opacity-40"
+          onClick={copy}
+          disabled={!joinCode}
         >
-          Copy
+          {copied ? "Copied" : "Copy"}
         </button>
       </div>
-      <button onClick={rotate} disabled={busy} className="px-4 py-2 rounded-xl border text-sm">
-        Rotate join code
+      <button
+        onClick={rotate}
+        disabled={busy || loading}
+        className="px-4 py-2 rounded-xl bg-teal-600 text-white text-sm inline-flex items-center gap-2 disabled:opacity-60"
+      >
+        {busy && <Loader2 size={14} className="animate-spin" />}
+        {joinCode ? "Generate new access code" : "Generate access code"}
       </button>
     </div>
   );

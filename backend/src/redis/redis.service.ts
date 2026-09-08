@@ -21,10 +21,12 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       return;
     }
     const redis = new Redis(url, {
-      maxRetriesPerRequest: 2,
+      maxRetriesPerRequest: 1,
       enableReadyCheck: true,
       lazyConnect: true,
-      connectTimeout: 4_000,
+      connectTimeout: 2_000,
+      commandTimeout: 1_500,
+      enableOfflineQueue: false,
     });
     redis.on('error', (err) => this.logger.warn(`Redis error: ${err.message}`));
     try {
@@ -46,7 +48,12 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   async get(key: string): Promise<string | null> {
-    if (this.client) return this.client.get(key);
+    try {
+      if (this.client) return await this.client.get(key);
+    } catch (err) {
+      this.logger.warn(`Redis get failed: ${(err as Error).message}`);
+      return null;
+    }
     const row = this.memory.get(key);
     if (!row) return null;
     if (row.expiresAt < Date.now()) {
@@ -57,25 +64,40 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   async set(key: string, value: string, ttlSeconds: number): Promise<void> {
-    if (this.client) {
-      await this.client.set(key, value, 'EX', ttlSeconds);
+    try {
+      if (this.client) {
+        await this.client.set(key, value, 'EX', ttlSeconds);
+        return;
+      }
+    } catch (err) {
+      this.logger.warn(`Redis set failed: ${(err as Error).message}`);
       return;
     }
     this.memory.set(key, { value, expiresAt: Date.now() + ttlSeconds * 1000 });
   }
 
   async del(key: string): Promise<void> {
-    if (this.client) {
-      await this.client.del(key);
+    try {
+      if (this.client) {
+        await this.client.del(key);
+        return;
+      }
+    } catch (err) {
+      this.logger.warn(`Redis del failed: ${(err as Error).message}`);
       return;
     }
     this.memory.delete(key);
   }
 
   async delByPrefix(prefix: string): Promise<void> {
-    if (this.client) {
-      const keys = await this.client.keys(`${prefix}*`);
-      if (keys.length) await this.client.del(...keys);
+    try {
+      if (this.client) {
+        const keys = await this.client.keys(`${prefix}*`);
+        if (keys.length) await this.client.del(...keys);
+        return;
+      }
+    } catch (err) {
+      this.logger.warn(`Redis delByPrefix failed: ${(err as Error).message}`);
       return;
     }
     for (const key of this.memory.keys()) {
@@ -84,11 +106,15 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   async incr(key: string, ttlSeconds: number): Promise<number> {
-    if (this.client) {
-      const count = await this.client.incr(key);
-      if (count === 1) await this.client.expire(key, ttlSeconds);
-      const ttl = await this.client.ttl(key);
-      return count;
+    try {
+      if (this.client) {
+        const count = await this.client.incr(key);
+        if (count === 1) await this.client.expire(key, ttlSeconds);
+        return count;
+      }
+    } catch (err) {
+      this.logger.warn(`Redis incr failed: ${(err as Error).message}`);
+      return 1;
     }
     const current = Number((await this.get(key)) ?? '0') + 1;
     await this.set(key, String(current), ttlSeconds);
@@ -96,7 +122,12 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   async ttl(key: string): Promise<number> {
-    if (this.client) return this.client.ttl(key);
+    try {
+      if (this.client) return await this.client.ttl(key);
+    } catch (err) {
+      this.logger.warn(`Redis ttl failed: ${(err as Error).message}`);
+      return -2;
+    }
     const row = this.memory.get(key);
     if (!row) return -2;
     return Math.max(0, Math.ceil((row.expiresAt - Date.now()) / 1000));

@@ -9,6 +9,8 @@ export interface CreateStaffInput {
   phone?: string;
   organizationId?: string;
   collegeId?: string;
+  orgRole?: 'ADMIN' | 'STAFF';
+  departmentIds?: string[];
 }
 
 export const getStaff = async (params: { page?: number; pageSize?: number; organizationId?: string; collegeId?: string } = {}) => {

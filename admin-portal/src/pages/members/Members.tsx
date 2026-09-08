@@ -13,13 +13,14 @@ export default function Members() {
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
 
   useEffect(() => {
+    const delay = query ? 300 : 0;
     const handle = setTimeout(() => {
       setLoading(true);
       getMembers({ search: query || undefined, pageSize: 50 })
         .then((res) => setStudents(res.items))
         .catch(() => setError("Could not load members."))
         .finally(() => setLoading(false));
-    }, 300);
+    }, delay);
     return () => clearTimeout(handle);
   }, [query]);
 

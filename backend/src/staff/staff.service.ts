@@ -84,7 +84,9 @@ export class StaffService {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
     const organizationId =
-      requester.role === UserRole.SUPPORT ? (query.collegeId ?? undefined) : requester.organizationId!;
+      requester.role === UserRole.SUPPORT
+        ? (query.organizationId ?? query.collegeId ?? undefined)
+        : requester.organizationId!;
     const where: Prisma.OrgStaffWhereInput = organizationId ? { organizationId } : {};
 
     const [items, total] = await Promise.all([
@@ -98,7 +100,16 @@ export class StaffService {
       this.prisma.orgStaff.count({ where }),
     ]);
 
-    return { items, total, page, pageSize };
+    return {
+      items: items.map((item) => ({
+        ...item,
+        collegeId: item.organizationId,
+        college: item.organization,
+      })),
+      total,
+      page,
+      pageSize,
+    };
   }
 
   async findOne(id: string) {
@@ -116,6 +127,9 @@ export class StaffService {
   async updateStatus(id: string, isActive: boolean) {
     const staff = await this.prisma.orgStaff.findUnique({ where: { id } });
     if (!staff) throw new NotFoundException('Staff member not found');
+    if (staff.orgRole === OrgRole.OWNER && !isActive) {
+      throw new ForbiddenException('The owner account cannot be deactivated');
+    }
     await this.prisma.user.update({ where: { id: staff.userId }, data: { isActive } });
     return this.findOne(id);
   }

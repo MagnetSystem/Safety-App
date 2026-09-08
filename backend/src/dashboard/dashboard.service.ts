@@ -31,24 +31,34 @@ export class DashboardService {
 
   async forStaff(user: AuthenticatedUser) {
     const organizationId = user.organizationId!;
+    const assignedSql =
+      user.role === 'STAFF' ? Prisma.sql`AND "assignedToUserId" = ${user.id}` : Prisma.empty;
     const assignedFilter = user.role === 'STAFF' ? { assignedToUserId: user.id } : {};
     const scope = { organizationId, ...assignedFilter };
 
-    const [today, emergency, pending, investigating, resolved, byCategory, byMonth, byDepartment] = await Promise.all([
-      this.prisma.incident.count({ where: { ...scope, createdAt: { gte: startOfToday() } } }),
-      this.prisma.incident.count({ where: { ...scope, type: 'EMERGENCY' } }),
-      this.prisma.incident.count({ where: { ...scope, status: 'SUBMITTED' } }),
-      this.prisma.incident.count({ where: { ...scope, status: 'INVESTIGATING' } }),
-      this.prisma.incident.count({ where: { ...scope, status: { in: ['RESOLVED', 'CLOSED'] } } }),
+    const [counts, byCategory, byMonth, byDepartment] = await Promise.all([
+      this.prisma.$queryRaw<
+        { today: bigint; emergency: bigint; pending: bigint; investigating: bigint; resolved: bigint }[]
+      >`
+        SELECT
+          COUNT(*) FILTER (WHERE "createdAt" >= ${startOfToday()}) AS today,
+          COUNT(*) FILTER (WHERE type = 'EMERGENCY') AS emergency,
+          COUNT(*) FILTER (WHERE status = 'SUBMITTED') AS pending,
+          COUNT(*) FILTER (WHERE status = 'INVESTIGATING') AS investigating,
+          COUNT(*) FILTER (WHERE status IN ('RESOLVED', 'CLOSED')) AS resolved
+        FROM "incidents"
+        WHERE "organizationId" = ${organizationId}
+        ${assignedSql}`,
       this.prisma.incident.groupBy({ by: ['category'], where: scope, _count: true }),
       this.prisma.$queryRaw<{ month: string; count: bigint }[]>`
         SELECT to_char("createdAt", 'YYYY-MM') as month, COUNT(*)::bigint as count
         FROM "incidents" WHERE "organizationId" = ${organizationId}
-        ${user.role === 'STAFF' ? Prisma.sql`AND "assignedToUserId" = ${user.id}` : Prisma.empty}
+        ${assignedSql}
         GROUP BY month ORDER BY month DESC LIMIT 12`,
       this.prisma.incident.groupBy({ by: ['departmentId'], where: { organizationId }, _count: true }),
     ]);
 
+    const totals = counts[0] ?? { today: 0n, emergency: 0n, pending: 0n, investigating: 0n, resolved: 0n };
     const deptIds = byDepartment.map((d) => d.departmentId).filter((id): id is string => !!id);
     const deptRows = deptIds.length
       ? await this.prisma.department.findMany({ where: { id: { in: deptIds } }, select: { id: true, name: true } })
@@ -56,11 +66,11 @@ export class DashboardService {
     const deptName = new Map(deptRows.map((d) => [d.id, d.name]));
 
     return {
-      todayReports: today,
-      emergencyReports: emergency,
-      pending,
-      investigating,
-      resolved,
+      todayReports: Number(totals.today),
+      emergencyReports: Number(totals.emergency),
+      pending: Number(totals.pending),
+      investigating: Number(totals.investigating),
+      resolved: Number(totals.resolved),
       byCategory: byCategory.map((c) => ({ category: c.category, count: c._count })),
       byMonth: byMonth.map((m) => ({ month: m.month, count: Number(m.count) })),
       byDepartment: byDepartment.map((d) => ({

@@ -63,6 +63,12 @@ export class OrganizationsController {
     return this.organizationsService.updateSettings(user.organizationId!, body);
   }
 
+  @Get('me/join-code')
+  @Roles(UserRole.STAFF)
+  getJoinCode(@CurrentUser() user: AuthenticatedUser) {
+    return this.organizationsService.getJoinCode(user.organizationId!);
+  }
+
   @Post('me/join-code')
   @Roles(UserRole.ADMIN)
   @Audit({ action: 'JOIN_CODE_ROTATED', entityType: 'Organization' })

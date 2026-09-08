@@ -11,7 +11,7 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { QueryStaffDto } from './dto/query-staff.dto';
 
 @Controller(['staff', 'college-admins'])
-@Roles(UserRole.ADMIN, UserRole.SUPPORT)
+@Roles(UserRole.OWNER, UserRole.ADMIN, UserRole.SUPPORT)
 export class StaffController {
   constructor(private readonly staffService: StaffService) {}
 

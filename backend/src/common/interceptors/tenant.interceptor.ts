@@ -18,6 +18,10 @@ export class TenantInterceptor implements NestInterceptor {
       bypassRls: user?.role === 'SUPPORT',
     };
 
+    if (!user) {
+      return tenantAls.run(store, () => next.handle());
+    }
+
     return new Observable((subscriber) => {
       const inner = tenantAls.run(store, () =>
         new Observable((innerSub) => {
