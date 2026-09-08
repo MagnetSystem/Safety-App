@@ -17,7 +17,6 @@ const ForgotPassword = lazy(() => import('../pages/auth/ForgotPassword'));
 const ResetPassword = lazy(() => import('../pages/auth/ResetPassword'));
 const SuperAdminDashboard = lazy(() => import('../pages/super-admin/Dashboard'));
 const Organizations = lazy(() => import('../pages/super-admin/Organizations'));
-const Staff = lazy(() => import('../pages/super-admin/Staff'));
 const AuditLogs = lazy(() => import('../pages/super-admin/AuditLogs'));
 const RegisterOrganization = lazy(() => import('../pages/auth/RegisterOrganization'));
 const Onboarding = lazy(() => import('../pages/onboarding/Onboarding'));
@@ -105,10 +104,10 @@ const AppRoutes = () => {
         <Route path="organizations" element={<Organizations />} />
         <Route path="colleges" element={<Navigate to="/super-admin/organizations" replace />} />
         <Route path="organization-types" element={<OrganizationTypes />} />
-        <Route path="staff" element={<Staff />} />
-        <Route path="college-admins" element={<Navigate to="/super-admin/staff" replace />} />
-        <Route path="members" element={<Members />} />
-        <Route path="students" element={<Navigate to="/super-admin/members" replace />} />
+        <Route path="staff" element={<Navigate to="/super-admin/organizations" replace />} />
+        <Route path="college-admins" element={<Navigate to="/super-admin/organizations" replace />} />
+        <Route path="members" element={<Navigate to="/super-admin/organizations" replace />} />
+        <Route path="students" element={<Navigate to="/super-admin/organizations" replace />} />
         <Route path="reports" element={<ReportsList />} />
         <Route path="reports/:id" element={<ReportDetail />} />
         <Route path="search" element={<Search />} />

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  LayoutGrid, Building2, Users, UserCog, Search, FileWarning,
+  LayoutGrid, Building2, Search, FileWarning,
   ScrollText, Bell, Settings, PanelLeftClose, PanelLeftOpen, Layers,
   MoreVertical, ChevronsUpDown, Menu, X, LogOut,
 } from "lucide-react";
@@ -19,8 +19,6 @@ const generalItems: NavItem[] = [
   { icon: LayoutGrid, label: "Dashboard", to: "/super-admin" },
   { icon: Building2, label: "Organizations", to: "/super-admin/organizations" },
   { icon: Layers, label: "Org types", to: "/super-admin/organization-types" },
-  { icon: UserCog, label: "Staff", to: "/super-admin/staff" },
-  { icon: Users, label: "Members", to: "/super-admin/members" },
   { icon: FileWarning, label: "Cases", to: "/super-admin/reports" },
 ];
 
@@ -49,9 +47,9 @@ export default function SuperAdminSidebar() {
   };
 
   const sidebarContent = (isMobile: boolean) => (
-    <>
+    <div className="flex flex-col h-full min-h-0">
       {/* Collapse button */}
-      <div className={`flex items-center mb-4 ${collapsed && !isMobile ? "justify-center" : "justify-between px-1"}`}>
+      <div className={`shrink-0 flex items-center mb-4 ${collapsed && !isMobile ? "justify-center" : "justify-between px-1"}`}>
         {(!collapsed || isMobile) && (
           <span className="text-[11px] font-semibold text-slate-400 tracking-wider uppercase">
             Support
@@ -76,8 +74,9 @@ export default function SuperAdminSidebar() {
 
       {/* Profile */}
       <button
+        type="button"
         className={`
-          flex items-center gap-2.5 mb-5 rounded-xl bg-white/40 hover:bg-white/60
+          shrink-0 flex items-center gap-2.5 mb-5 rounded-xl bg-white/40 hover:bg-white/60
           border border-white/50 backdrop-blur-md transition
           ${collapsed && !isMobile ? "justify-center p-2" : "px-2.5 py-2.5"}
         `}
@@ -98,14 +97,12 @@ export default function SuperAdminSidebar() {
         )}
       </button>
 
-      {/* GENERAL */}
-      <NavSection title="General" items={generalItems} collapsed={collapsed && !isMobile} onItemClick={() => isMobile && setMobileOpen(false)} />
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <NavSection title="General" items={generalItems} collapsed={collapsed && !isMobile} onItemClick={() => isMobile && setMobileOpen(false)} />
+        <NavSection title="System" items={systemItems} collapsed={collapsed && !isMobile} onItemClick={() => isMobile && setMobileOpen(false)} />
+      </div>
 
-      {/* SYSTEM */}
-      <NavSection title="System" items={systemItems} collapsed={collapsed && !isMobile} onItemClick={() => isMobile && setMobileOpen(false)} />
-
-      {/* Bottom */}
-      <div className="mt-auto pt-4 border-t border-white/30 space-y-1">
+      <div className="shrink-0 mt-auto pt-4 border-t border-white/30 space-y-1">
         <NavLink
           to="/super-admin/settings"
           onClick={() => isMobile && setMobileOpen(false)}
@@ -119,6 +116,7 @@ export default function SuperAdminSidebar() {
           {(!collapsed || isMobile) && "Settings"}
         </NavLink>
         <button
+          type="button"
           onClick={handleLogout}
           className={`flex items-center rounded-lg text-[13.5px] font-medium transition text-slate-600 hover:bg-red-50 hover:text-red-600 w-full
           ${collapsed && !isMobile ? "justify-center p-2.5" : "gap-2.5 px-2.5 py-2"}`}
@@ -127,7 +125,7 @@ export default function SuperAdminSidebar() {
           {(!collapsed || isMobile) && "Logout"}
         </button>
       </div>
-    </>
+    </div>
   );
 
   return (

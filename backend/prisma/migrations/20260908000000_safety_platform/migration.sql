@@ -149,12 +149,8 @@ ALTER TABLE "incidents" RENAME CONSTRAINT "complaints_studentId_fkey" TO "incide
 ALTER TABLE "incidents" ADD CONSTRAINT "incidents_assignedToUserId_fkey"
   FOREIGN KEY ("assignedToUserId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
-DROP TYPE "ComplaintStatus";
-DROP TYPE "ComplaintPriority";
-DROP TYPE "IncidentCategory";
-
 -- ---------------------------------------------------------------------------
--- Incident children
+-- Incident children (convert timeline status before dropping ComplaintStatus)
 -- ---------------------------------------------------------------------------
 
 ALTER TABLE "incident_evidence" RENAME COLUMN "complaintId" TO "incidentId";
@@ -173,6 +169,10 @@ ALTER TABLE "incident_timeline" ALTER COLUMN "status" TYPE "IncidentStatus" USIN
 ALTER INDEX "complaint_timeline_complaintId_idx" RENAME TO "incident_timeline_incidentId_idx";
 ALTER TABLE "incident_timeline" RENAME CONSTRAINT "complaint_timeline_pkey" TO "incident_timeline_pkey";
 ALTER TABLE "incident_timeline" RENAME CONSTRAINT "complaint_timeline_complaintId_fkey" TO "incident_timeline_incidentId_fkey";
+
+DROP TYPE "ComplaintStatus";
+DROP TYPE "ComplaintPriority";
+DROP TYPE "IncidentCategory";
 
 -- ---------------------------------------------------------------------------
 -- Audit logs

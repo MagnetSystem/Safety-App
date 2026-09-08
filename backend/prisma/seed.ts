@@ -128,7 +128,7 @@ async function main() {
     { email: 'priya.nair@gec-demo.edu', name: 'Priya Nair', memberNumber: 'GEC22EC022', department: 'Electronics', course: 'B.Tech', year: 1 },
   ];
 
-  const members = [];
+  const members: { id: string }[] = [];
   for (const s of membersSeed) {
     const user = await prisma.user.upsert({
       where: { email: s.email },
