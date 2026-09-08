@@ -76,7 +76,10 @@ export class AuthService {
       const industry = (dto.industry ?? 'EDUCATION').toUpperCase();
       const catalog = await this.orgTypes.resolve(industry);
       const typeRow = await this.orgTypes.findTypeRow(industry);
-      const settings = await this.orgTypes.settingsForSlug(industry);
+      const settings = {
+        ...(await this.orgTypes.settingsForSlug(industry)),
+        orgSetup: dto.setup ?? {},
+      };
       const code = dto.organizationCode?.trim() || slugCodeFromName(dto.organizationName);
       const existingOrg = await this.prisma.organization.findUnique({ where: { code } });
       if (existingOrg) throw new ConflictException('An organization with this code already exists');

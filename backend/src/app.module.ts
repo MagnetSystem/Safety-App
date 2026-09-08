@@ -14,10 +14,10 @@ import { AuditLogInterceptor } from './common/interceptors/audit-log.interceptor
 import { TenantInterceptor } from './common/interceptors/tenant.interceptor';
 
 import { AuthModule } from './auth/auth.module';
-import { CollegesModule } from './colleges/colleges.module';
-import { CollegeAdminsModule } from './college-admins/college-admins.module';
-import { StudentsModule } from './students/students.module';
-import { ComplaintsModule } from './complaints/complaints.module';
+import { OrganizationsModule } from './organizations/organizations.module';
+import { StaffModule } from './staff/staff.module';
+import { MembersModule } from './members/members.module';
+import { IncidentsModule } from './incidents/incidents.module';
 import { EvidenceModule } from './evidence/evidence.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AuditLogsModule } from './audit-logs/audit-logs.module';
@@ -44,10 +44,10 @@ import { HealthController } from './health.controller';
     }),
     PrismaModule,
     AuthModule,
-    CollegesModule,
-    CollegeAdminsModule,
-    StudentsModule,
-    ComplaintsModule,
+    OrganizationsModule,
+    StaffModule,
+    MembersModule,
+    IncidentsModule,
     EvidenceModule,
     NotificationsModule,
     AuditLogsModule,

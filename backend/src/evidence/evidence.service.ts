@@ -7,7 +7,7 @@ import type { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import { StorageService } from './storage.service';
 import { RequestUploadUrlDto } from './dto/request-upload-url.dto';
 import { ConfirmEvidenceDto } from './dto/confirm-evidence.dto';
-import { ComplaintsService } from '../complaints/complaints.service';
+import { IncidentsService } from '../incidents/incidents.service';
 
 @Injectable()
 export class EvidenceService {
@@ -15,7 +15,7 @@ export class EvidenceService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly notifications: NotificationsService,
-    private readonly incidents: ComplaintsService,
+    private readonly incidents: IncidentsService,
   ) {}
 
   private async getIncidentWithAccess(user: AuthenticatedUser, incidentId: string) {

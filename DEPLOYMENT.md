@@ -4,7 +4,7 @@ This guide gets a shared test environment live:
 
 | Piece | Host | URL shape |
 |-------|------|-----------|
-| Backend API | Render (`render.yaml`) | `https://campus-safety-api.onrender.com/api` |
+| Backend API | Render (`render.yaml`) | `https://safety-platform-api.onrender.com/api` |
 | Admin portal | Vercel (`vercel.json`) | `https://<project>.vercel.app` |
 | Student app | Expo Go + tunnel | QR code from your machine |
 | Database | Existing Supabase Postgres | — |
@@ -36,7 +36,7 @@ git push origin main
 ## 2. Backend → Render
 
 1. [dashboard.render.com](https://dashboard.render.com) → **New → Blueprint** → connect this repo.
-   Render reads `render.yaml` and creates the `campus-safety-api` service.
+   Render reads `render.yaml` and creates the `safety-platform-api` service.
 2. Fill in the secret env vars (marked `sync: false`) in the service's **Environment** tab:
 
    | Key | Value |
@@ -45,7 +45,7 @@ git push origin main
    | `DIRECT_URL` | rotated Supabase direct URI |
    | `JWT_ACCESS_SECRET` | `node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"` |
    | `JWT_REFRESH_SECRET` | run the command again (different value) |
-   | `CORS_ORIGINS` | your Vercel URL, e.g. `https://campus-safety-admin.vercel.app` (fill in after step 3, comma-separated, no trailing slash) |
+   | `CORS_ORIGINS` | your Vercel URL, e.g. `https://admin-portal.vercel.app` (fill in after step 3, comma-separated, no trailing slash) |
    | `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | only if you want evidence-file uploads in this test; otherwise leave blank |
    | `SEED_SUPER_ADMIN_EMAIL` / `SEED_SUPER_ADMIN_PASSWORD` | for the one-time seed below |
 
@@ -68,7 +68,7 @@ git push origin main
 ## 3. Admin portal → Vercel
 
 1. [vercel.com/new](https://vercel.com/new) → import this repo.
-2. **Root Directory**: `Admin-collge-portal/campus-safety-admin`. Vercel detects Vite from
+2. **Root Directory**: `admin-portal`. Vercel detects Vite from
    `vercel.json`.
 3. Environment variable:
 
@@ -84,14 +84,14 @@ git push origin main
 
 ## 4. Student app → Expo Go
 
-1. Set the API URL so testers' phones can reach the backend. Edit `student-frontend/.env`:
+1. Set the API URL so testers' phones can reach the backend. Edit `member-app/.env`:
 
    ```
    EXPO_PUBLIC_API_BASE_URL=https://<your-render-service>.onrender.com/api
    ```
 
    Commit and push (it's not a secret).
-2. From `student-frontend/`:
+2. From `member-app/`:
 
    ```bash
    npm install

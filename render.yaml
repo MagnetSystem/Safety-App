@@ -1,9 +1,9 @@
-# Render blueprint for the Campus Safety backend API.
+# Render blueprint for the Safety Platform backend API.
 # Create a new "Blueprint" service in Render pointed at this repo; Render reads this file.
 # Secrets (sync: false) must be filled in from the Render dashboard after the first deploy.
 services:
   - type: web
-    name: campus-safety-api
+    name: safety-platform-api
     runtime: node
     plan: free
     rootDir: backend

@@ -1,7 +1,8 @@
 import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
 
+/** @deprecated Use RegisterOrganizationDto */
 export class RegisterCollegeDto {
-  // --- College details ---
+  // --- Legacy college signup fields ---
   @IsString()
   @IsNotEmpty()
   collegeName: string;

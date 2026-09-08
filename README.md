@@ -1,4 +1,4 @@
-# Campus Safety App (Monorepo)
+# Safety Platform (Monorepo)
 
 Welcome to the **Safety Platform** repository. This is a multi-tenant safety product: a member app for filing reports and Emergency SOS, a staff dashboard for Owners / Admins / Staff, and a shared backend. Any organization — college, company, care home, or a person on their own — uses the same system with their own private space.
 
@@ -13,11 +13,11 @@ This repository is structured as a **Monorepo**, housing the following core serv
   - Database Management: Prisma ORM
   - Purpose: Serves endpoints for user authentication, incident reporting, notifications, and data management.
 
-- **`/student-frontend`** - The Member (and Guardian) mobile app.
+- **`/member-app`** - The Member (and Guardian) mobile app.
   - Framework: React Native / Expo
   - Purpose: Sign up alone or join an organization, file reports, trigger Emergency SOS, and link a Guardian who is alerted only in emergencies.
 
-- **`/Admin-collge-portal`** - The organization dashboard.
+- **`/admin-portal`** - The organization dashboard.
   - Purpose: Owners, Admins, and Staff review cases. Support (Magnet Systems) manages the platform itself.
 
 ---
@@ -49,16 +49,16 @@ npx prisma migrate deploy
 npm run start:dev
 ```
 
-**Starting the Student App:**
+**Starting the Member App:**
 ```bash
-cd student-frontend
+cd member-app
 npm install
 npx expo start
 ```
 
 **Starting the Admin Portal:**
 ```bash
-cd Admin-collge-portal/campus-safety-admin
+cd admin-portal
 npm install
 npm run dev
 ```
@@ -103,8 +103,8 @@ This repo has **3 automated GitHub Actions workflows** that trigger on every pus
 | When you push to `main`... | It deploys to... |
 |---|---|
 | Changes in `backend/**` | 🚂 **Railway** (Backend API) |
-| Changes in `Admin-collge-portal/**` | 🔺 **Vercel** (Admin Portal — Production) |
-| Changes in `student-frontend/**` | 📱 **EAS OTA Update** (Student App via Expo Go) |
+| Changes in `admin-portal/**` | 🔺 **Vercel** (Admin Portal — Production) |
+| Changes in `member-app/**` | 📱 **EAS OTA Update** (Member App via Expo Go) |
 
 ---
 
@@ -127,7 +127,7 @@ Go to **`github.com/MagnetSystem/Safety-App` → Settings → Secrets and variab
 | `VERCEL_PROJECT_ID` | Found in `.vercel/project.json` after running `vercel link` in the admin portal folder |
 | `VITE_API_URL` | Your Railway backend public URL (e.g. `https://your-api.up.railway.app`) |
 
-#### 📱 Student App → EAS (Expo Go)
+#### 📱 Member App → EAS (Expo Go)
 | Secret | How to get it |
 |---|---|
 | `EXPO_TOKEN` | [expo.dev](https://expo.dev) → Account → Access Tokens → Create |
@@ -137,7 +137,7 @@ Go to **`github.com/MagnetSystem/Safety-App` → Settings → Secrets and variab
 
 ### Step 2 — One-Time EAS Setup (run locally, only once)
 
-Before the student app workflow can run, EAS must be initialised:
+Before the member app workflow can run, EAS must be initialised:
 
 ```bash
 # 1. Install EAS CLI globally
@@ -147,7 +147,7 @@ npm install --global eas-cli
 eas login
 
 # 3. Go into the student frontend folder
-cd student-frontend
+cd member-app
 
 # 4. Link the project to your Expo account (generates a projectId in app.json)
 eas init
@@ -168,7 +168,7 @@ git push origin main
 iOS testers do not need an APK. They use the **Expo Go** app:
 
 1. Tester installs **Expo Go** from the App Store
-2. Share your project URL: `https://expo.dev/@YOUR_EXPO_USERNAME/student-app`
+2. Share your project URL: `https://expo.dev/@YOUR_EXPO_USERNAME/member-app`
 3. Tester taps the link → opens in Expo Go → app loads instantly
 4. Every future push to `main` triggers `eas update` → app updates silently on next open ✅
 

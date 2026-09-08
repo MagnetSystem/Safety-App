@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsObject, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class RegisterOrganizationDto {
   @IsString()
@@ -52,4 +52,9 @@ export class RegisterOrganizationDto {
   @IsOptional()
   @IsString()
   ownerPhone?: string;
+
+  /** Type-specific answers collected during org setup (not member profile). */
+  @IsOptional()
+  @IsObject()
+  setup?: Record<string, string | number | boolean>;
 }

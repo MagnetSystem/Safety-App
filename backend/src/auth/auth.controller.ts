@@ -31,7 +31,7 @@ export class AuthController {
     return this.authService.registerMember(dto);
   }
 
-  /** @deprecated Use register/member. Kept so existing student-app builds keep working. */
+  /** @deprecated Use register/member. Kept so existing member-app builds keep working. */
   @Public()
   @Post('register/student')
   async registerStudent(@Body() dto: RegisterStudentDto) {
@@ -60,7 +60,7 @@ export class AuthController {
   /** @deprecated Use register/organization. */
   @Public()
   @Post('register/college')
-  registerCollege(@Body() dto: RegisterCollegeDto) {
+  registerCollegeLegacy(@Body() dto: RegisterCollegeDto) {
     return this.authService.registerOrganization({
       organizationName: dto.collegeName,
       organizationCode: dto.collegeCode,
