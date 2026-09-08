@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Search, Plus, Building2, Loader2, X, LogIn, KeyRound } from "lucide-react";
 import {
   getOrganizations,
@@ -13,6 +14,9 @@ import { onboardClient } from "../../services/organizationTypesService";
 import { enterOrganization } from "../../services/authService";
 import { useAuth } from "../../context/AuthContext";
 import type { Organization } from "../../types/organization";
+import { useDebouncedValue } from "../../hooks/useDebouncedValue";
+import { queryKeys } from "../../lib/queryKeys";
+import type { Paginated } from "../../types/report";
 
 type OrgDetail = Organization & {
   joinCode?: string;
@@ -30,41 +34,49 @@ const EMPTY_FORM: CreateOrganizationInput & { ownerName: string; ownerEmail: str
 
 export default function Organizations() {
   const { user, applySession } = useAuth();
-  const [colleges, setColleges] = useState<Organization[]>([]);
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState("All");
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const debouncedSearch = useDebouncedValue(search, 300);
+  const [actionError, setActionError] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
-  const [types, setTypes] = useState<IndustryCatalog[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
   const [joinResult, setJoinResult] = useState<string | null>(null);
-  const [detail, setDetail] = useState<OrgDetail | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [listPreview, setListPreview] = useState<OrgDetail | null>(null);
   const [entering, setEntering] = useState(false);
   const [ownerPassword, setOwnerPassword] = useState("");
   const [resetBusy, setResetBusy] = useState(false);
   const [resetMessage, setResetMessage] = useState("");
   const [resetError, setResetError] = useState("");
 
-  const load = () => {
-    setLoading(true);
-    getOrganizations({ search: search || undefined, pageSize: 100 })
-      .then((res) => setColleges(res.items))
-      .catch(() => setError("Could not load organizations."))
-      .finally(() => setLoading(false));
-  };
+  const listKey = queryKeys.organizations.list({ search: debouncedSearch || undefined, pageSize: 100 });
+  const { data, isLoading: loading, isError } = useQuery({
+    queryKey: listKey,
+    queryFn: () => getOrganizations({ search: debouncedSearch || undefined, pageSize: 100 }),
+    placeholderData: keepPreviousData,
+  });
+  const colleges = data?.items ?? [];
+  const error = actionError || (isError ? "Could not load organizations." : "");
+
+  const { data: types = [] } = useQuery({
+    queryKey: queryKeys.industryCatalog,
+    queryFn: () => getIndustryCatalog().catch(() => [] as IndustryCatalog[]),
+  });
+
+  const { data: fetchedDetail, isFetching: detailLoading } = useQuery({
+    queryKey: queryKeys.organizations.detail(selectedId ?? ""),
+    queryFn: () => getOrganization(selectedId!),
+    enabled: !!selectedId,
+  });
+
+  const detail = selectedId ? ((fetchedDetail as OrgDetail | undefined) ?? listPreview) : null;
 
   useEffect(() => {
-    const handle = setTimeout(load, 300);
-    return () => clearTimeout(handle);
-  }, [search]);
-
-  useEffect(() => {
-    getIndustryCatalog().then(setTypes).catch(() => undefined);
-  }, []);
+    if (fetchedDetail) setListPreview(fetchedDetail as OrgDetail);
+  }, [fetchedDetail]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,7 +103,7 @@ export default function Organizations() {
         setShowForm(false);
         setForm(EMPTY_FORM);
       }
-      load();
+      queryClient.invalidateQueries({ queryKey: queryKeys.organizations.all });
     } catch (err: any) {
       setFormError(err?.response?.data?.message || "Could not create organization.");
     } finally {
@@ -101,34 +113,31 @@ export default function Organizations() {
 
   const toggleStatus = async (c: Organization) => {
     const next = c.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
-    setColleges((prev) => prev.map((x) => (x.id === c.id ? { ...x, status: next } : x)));
-    setDetail((prev) => (prev?.id === c.id ? { ...prev, status: next } : prev));
+    queryClient.setQueryData<Paginated<Organization>>(listKey, (old) =>
+      old ? { ...old, items: old.items.map((x) => (x.id === c.id ? { ...x, status: next } : x)) } : old,
+    );
+    if (listPreview?.id === c.id) setListPreview({ ...listPreview, status: next });
+    queryClient.setQueryData(queryKeys.organizations.detail(c.id), (old: OrgDetail | undefined) =>
+      old ? { ...old, status: next } : old,
+    );
     try {
       await updateOrganizationStatus(c.id, next);
     } catch {
-      load(); // revert on failure
+      queryClient.invalidateQueries({ queryKey: queryKeys.organizations.all });
     }
   };
 
-  const openDetail = async (c: Organization) => {
+  const openDetail = (c: Organization) => {
     setResetMessage("");
     setResetError("");
     setOwnerPassword("");
-    setDetail(c);
-    setDetailLoading(true);
-    try {
-      const org = await getOrganization(c.id);
-      setDetail(org);
-    } catch {
-      setError("Could not load organization details.");
-    } finally {
-      setDetailLoading(false);
-    }
+    setSelectedId(c.id);
+    setListPreview(c);
   };
 
   const enterOrg = async (org: { id: string; name: string }) => {
     setEntering(true);
-    setError("");
+    setActionError("");
     try {
       const tokens = await enterOrganization(org.id);
       await applySession(tokens, {
@@ -137,7 +146,7 @@ export default function Organizations() {
         supportSession: { organizationId: org.id, organizationName: org.name },
       });
     } catch (err: any) {
-      setError(err?.response?.data?.message || "Could not enter this organization.");
+      setActionError(err?.response?.data?.message || "Could not enter this organization.");
     } finally {
       setEntering(false);
     }
@@ -358,7 +367,7 @@ export default function Organizations() {
 
       {detail && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/30 backdrop-blur-sm">
-          <button type="button" aria-label="Close details" className="flex-1" onClick={() => setDetail(null)} />
+          <button type="button" aria-label="Close details" className="flex-1" onClick={() => { setSelectedId(null); setListPreview(null); }} />
           <aside className="w-full max-w-md h-full bg-card border-l border-border shadow-xl overflow-y-auto p-6 space-y-5">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -368,7 +377,7 @@ export default function Organizations() {
                   {detail.organizationType?.label ?? detail.industry ?? "Type not set"} · {detail.code}
                 </p>
               </div>
-              <button type="button" onClick={() => setDetail(null)} className="p-1 rounded-lg hover:bg-muted">
+              <button type="button" onClick={() => { setSelectedId(null); setListPreview(null); }} className="p-1 rounded-lg hover:bg-muted">
                 <X size={18} />
               </button>
             </div>

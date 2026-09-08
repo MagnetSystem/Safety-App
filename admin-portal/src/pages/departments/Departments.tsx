@@ -1,45 +1,43 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Plus, Trash2, Building2 } from "lucide-react";
 import {
   createDepartment,
   deleteDepartment,
   getDepartments,
   updateDepartment,
-  type Department,
 } from "../../services/departmentsService";
+import { queryKeys } from "../../lib/queryKeys";
 
 export default function Departments() {
-  const [items, setItems] = useState<Department[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [actionError, setActionError] = useState("");
+  const { data: items = [], isLoading: loading, isError } = useQuery({
+    queryKey: queryKeys.departments.all,
+    queryFn: getDepartments,
+  });
+  const error = actionError || (isError ? "Could not load departments." : "");
 
-  const load = () => {
-    setLoading(true);
-    getDepartments()
-      .then(setItems)
-      .catch(() => setError("Could not load departments."))
-      .finally(() => setLoading(false));
-  };
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.departments.all });
 
-  useEffect(load, []);
+  const createMutation = useMutation({
+    mutationFn: createDepartment,
+    onSuccess: () => {
+      setName("");
+      setDescription("");
+      invalidate();
+    },
+    onError: () => setActionError("Could not create department."),
+  });
+  const saving = createMutation.isPending;
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (name.trim().length < 2) return;
-    setSaving(true);
-    try {
-      await createDepartment({ name: name.trim(), description: description.trim() || undefined });
-      setName("");
-      setDescription("");
-      load();
-    } catch {
-      setError("Could not create department.");
-    } finally {
-      setSaving(false);
-    }
+    setActionError("");
+    createMutation.mutate({ name: name.trim(), description: description.trim() || undefined });
   };
 
   return (
@@ -128,7 +126,7 @@ export default function Departments() {
                   <td className="px-5 py-4 text-right space-x-2">
                     {!d.isDefault && (
                       <button
-                        onClick={() => updateDepartment(d.id, { isDefault: true }).then(load)}
+                        onClick={() => updateDepartment(d.id, { isDefault: true }).then(invalidate)}
                         className="text-xs text-slate-500 hover:text-teal-700"
                       >
                         Make default
@@ -137,7 +135,7 @@ export default function Departments() {
                     <button
                       onClick={() => {
                         if (window.confirm(`Remove ${d.name}? Existing cases stay, unassigned.`)) {
-                          deleteDepartment(d.id).then(load);
+                          deleteDepartment(d.id).then(invalidate);
                         }
                       }}
                       className="inline-flex text-slate-400 hover:text-red-600"

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, Download, MessageSquare,
   MapPin, Clock, Loader2, FileImage, FileText, ExternalLink
@@ -8,8 +9,9 @@ import {
   getReportById, updateReportStatus, getEvidence, getMessages, postMessage,
   type ComplaintMessage,
 } from "../../services/incidentsService";
-import { formatEnum, type ComplaintStatus, type Evidence, type Report } from "../../types/report";
+import { formatEnum, type ComplaintStatus } from "../../types/report";
 import { useAuth } from "../../context/AuthContext";
+import { queryKeys } from "../../lib/queryKeys";
 import jsPDF from "jspdf";
 
 const STATUS_OPTIONS: ComplaintStatus[] = [
@@ -24,53 +26,77 @@ const STATUS_OPTIONS: ComplaintStatus[] = [
 export default function ReportDetail() {
   const { id } = useParams();
   const { role } = useAuth();
+  const queryClient = useQueryClient();
   const canManage = role === "admin" || role === "owner" || role === "staff" || role === "support";
-  const [report, setReport] = useState<Report | null>(null);
-  const [evidence, setEvidence] = useState<Evidence[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
   
   // Status Change State
   const [statusValue, setStatusValue] = useState<ComplaintStatus>("SUBMITTED");
   const [pendingStatus, setPendingStatus] = useState<ComplaintStatus | null>(null);
   const [resolutionReport, setResolutionReport] = useState("");
-  const [updating, setUpdating] = useState(false);
 
   // Student conversation
-  const [messages, setMessages] = useState<ComplaintMessage[]>([]);
   const [draft, setDraft] = useState("");
-  const [sendingMsg, setSendingMsg] = useState(false);
 
-  const load = () => {
-    if (!id) return;
-    setLoading(true);
-    Promise.all([getReportById(id), getEvidence(id), getMessages(id).catch(() => [])])
-      .then(([r, e, m]) => {
-        setReport(r);
-        setStatusValue(r.status);
-        setEvidence(e);
-        setMessages(m);
-      })
-      .catch(() => setError("Could not load this report."))
-      .finally(() => setLoading(false));
-  };
+  const reportQuery = useQuery({
+    queryKey: queryKeys.reports.detail(id ?? ""),
+    queryFn: () => getReportById(id!),
+    enabled: !!id,
+  });
+  const evidenceQuery = useQuery({
+    queryKey: queryKeys.reports.evidence(id ?? ""),
+    queryFn: () => getEvidence(id!),
+    enabled: !!id,
+  });
+  const messagesQuery = useQuery({
+    queryKey: queryKeys.reports.messages(id ?? ""),
+    queryFn: () => getMessages(id!).catch(() => [] as ComplaintMessage[]),
+    enabled: !!id,
+  });
+
+  const report = reportQuery.data ?? null;
+  const evidence = evidenceQuery.data ?? [];
+  const messages = messagesQuery.data ?? [];
+  const loading = reportQuery.isLoading || evidenceQuery.isLoading || messagesQuery.isLoading;
+  const error = reportQuery.isError || evidenceQuery.isError
+    ? "Could not load this report."
+    : actionError;
+
+  useEffect(() => {
+    if (report) setStatusValue(report.status);
+  }, [report]);
+
+  const sendMutation = useMutation({
+    mutationFn: (body: string) => postMessage(id!, body),
+    onSuccess: (msg) => {
+      queryClient.setQueryData<ComplaintMessage[]>(queryKeys.reports.messages(id!), (prev = []) => [...prev, msg]);
+      setDraft("");
+    },
+    onError: () => setActionError("Could not send the message."),
+  });
+  const sendingMsg = sendMutation.isPending;
 
   const handleSendMessage = async () => {
     const body = draft.trim();
     if (!id || !body || sendingMsg) return;
-    setSendingMsg(true);
-    try {
-      const msg = await postMessage(id, body);
-      setMessages((prev) => [...prev, msg]);
-      setDraft("");
-    } catch {
-      setError("Could not send the message.");
-    } finally {
-      setSendingMsg(false);
-    }
+    sendMutation.mutate(body);
   };
 
-  useEffect(load, [id]);
+  const statusMutation = useMutation({
+    mutationFn: ({ next, reportText }: { next: ComplaintStatus; reportText?: string }) =>
+      updateReportStatus(id!, next, undefined, reportText),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(queryKeys.reports.detail(id!), updated);
+      queryClient.invalidateQueries({ queryKey: queryKeys.reports.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orgDashboard });
+      queryClient.invalidateQueries({ queryKey: queryKeys.superAdminDashboard });
+      setStatusValue(updated.status);
+      setPendingStatus(null);
+      setResolutionReport("");
+    },
+    onError: () => setActionError("Could not update status."),
+  });
+  const updating = statusMutation.isPending;
 
   const handleStatusSelect = (next: ComplaintStatus) => {
     if (next === report?.status) {
@@ -92,18 +118,7 @@ export default function ReportDetail() {
 
   const submitStatusChange = async (next: ComplaintStatus, reportText?: string) => {
     if (!id) return;
-    setUpdating(true);
-    try {
-      const updated = await updateReportStatus(id, next, undefined, reportText);
-      setReport(updated);
-      setStatusValue(updated.status);
-      setPendingStatus(null);
-      setResolutionReport("");
-    } catch {
-      setError("Could not update status.");
-    } finally {
-      setUpdating(false);
-    }
+    statusMutation.mutate({ next, reportText });
   };
 
   const handleConfirmResolution = () => {

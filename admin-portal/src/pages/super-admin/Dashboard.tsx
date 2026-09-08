@@ -1,22 +1,18 @@
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Building2, Users, UserCog, FileText,
   AlertTriangle, CheckCircle2, TrendingUp, Loader2,
 } from "lucide-react";
-import { getSuperAdminDashboard, type SuperAdminDashboard } from "../../services/dashboardService";
+import { getSuperAdminDashboard } from "../../services/dashboardService";
 import { formatEnum } from "../../types/report";
+import { queryKeys } from "../../lib/queryKeys";
 
 export default function SuperAdminDashboard() {
-  const [data, setData] = useState<SuperAdminDashboard | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    getSuperAdminDashboard()
-      .then(setData)
-      .catch(() => setError("Could not load platform dashboard."))
-      .finally(() => setLoading(false));
-  }, []);
+  const { data, isLoading: loading, isError } = useQuery({
+    queryKey: queryKeys.superAdminDashboard,
+    queryFn: getSuperAdminDashboard,
+  });
+  const error = isError ? "Could not load platform dashboard." : "";
 
   const totalState = data?.byState.reduce((s, x) => s + x.count, 0) || 1;
   const maxMonth = Math.max(1, ...(data?.byMonth.map((m) => m.count) ?? [1]));

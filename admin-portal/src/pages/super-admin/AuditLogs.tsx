@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Search, Loader2, ChevronLeft, ChevronRight, Building } from "lucide-react";
-import { getAuditLogs, type AuditLogEntry } from "../../services/auditLogsService";
+import { getAuditLogs } from "../../services/auditLogsService";
 import { getOrganizations } from "../../services/organizationsService";
 import { formatEnum } from "../../types/report";
 import { useAuth } from "../../context/AuthContext";
+import { queryKeys } from "../../lib/queryKeys";
 
 function timeAgo(iso: string) {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -19,33 +21,25 @@ function timeAgo(iso: string) {
 
 export default function AuditLogs() {
   const { role } = useAuth();
-  const [logs, setLogs] = useState<AuditLogEntry[]>([]);
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [colleges, setColleges] = useState<{ id: string; name: string }[]>([]);
   const [selectedCollegeId, setSelectedCollegeId] = useState("");
 
-  useEffect(() => {
-    if (role === 'support') {
-      getOrganizations({ pageSize: 100 })
-        .then(res => setColleges(res.items))
-        .catch(console.error);
-    }
-  }, [role]);
+  const { data: orgsData } = useQuery({
+    queryKey: queryKeys.organizations.list({ pageSize: 100 }),
+    queryFn: () => getOrganizations({ pageSize: 100 }),
+    enabled: role === "support",
+  });
+  const colleges = orgsData?.items ?? [];
 
-  useEffect(() => {
-    setLoading(true);
-    getAuditLogs({ page, pageSize: 20, collegeId: selectedCollegeId || undefined })
-      .then((res) => {
-        setLogs(res.items);
-        setTotalPages(Math.ceil(res.total / res.pageSize));
-      })
-      .catch(() => setError("Could not load audit logs."))
-      .finally(() => setLoading(false));
-  }, [page, selectedCollegeId]);
+  const { data, isLoading: loading, isError } = useQuery({
+    queryKey: queryKeys.auditLogs.list(page, selectedCollegeId || undefined),
+    queryFn: () => getAuditLogs({ page, pageSize: 20, collegeId: selectedCollegeId || undefined }),
+    placeholderData: keepPreviousData,
+  });
+  const logs = data?.items ?? [];
+  const totalPages = data ? Math.ceil(data.total / data.pageSize) : 1;
+  const error = isError ? "Could not load audit logs." : "";
 
   const filtered = logs.filter((l) => {
     const q = search.toLowerCase();

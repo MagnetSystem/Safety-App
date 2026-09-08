@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { changePassword, updateMyProfile } from "../../services/authService";
@@ -9,6 +10,7 @@ import {
   updateMyOrgSettings,
   updateMyOrganization,
 } from "../../services/organizationsService";
+import { queryKeys } from "../../lib/queryKeys";
 
 type Tab = "account" | "organization" | "features" | "access";
 
@@ -152,15 +154,22 @@ export function AccountPanel({
 
 function OrganizationPanel() {
   const { updateLocalUser } = useAuth();
+  const queryClient = useQueryClient();
+  const { data: orgData, isLoading, isError } = useQuery({
+    queryKey: queryKeys.organizations.me,
+    queryFn: getMyOrganization,
+  });
   const [org, setOrg] = useState<any>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    getMyOrganization().then(setOrg).catch(() => setError("Could not load organization."));
-  }, []);
+    if (orgData) setOrg(orgData);
+  }, [orgData]);
 
-  if (!org) return <div className="text-sm text-slate-500">{error || "Loading…"}</div>;
+  if (isLoading || !org) {
+    return <div className="text-sm text-slate-500">{isError || error ? "Could not load organization." : "Loading…"}</div>;
+  }
 
   const save = async () => {
     setSaving(true);
@@ -175,6 +184,7 @@ function OrganizationPanel() {
         email: org.email,
       });
       setOrg(updated);
+      queryClient.setQueryData(queryKeys.organizations.me, updated);
       updateLocalUser({ organizationName: updated.name, collegeName: updated.name });
     } catch {
       setError("Could not save.");
@@ -205,14 +215,19 @@ function OrganizationPanel() {
 }
 
 function FeaturesPanel() {
+  const queryClient = useQueryClient();
+  const { data: orgData, isLoading } = useQuery({
+    queryKey: queryKeys.organizations.me,
+    queryFn: getMyOrganization,
+  });
   const [settings, setSettings] = useState<any>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    getMyOrganization().then((org) => setSettings(org.settings ?? {})).catch(() => undefined);
-  }, []);
+    if (orgData) setSettings(orgData.settings ?? {});
+  }, [orgData]);
 
-  if (!settings) return <div className="text-sm text-slate-500">Loading…</div>;
+  if (isLoading || !settings) return <div className="text-sm text-slate-500">Loading…</div>;
 
   const features = settings.features ?? {};
   const toggle = (key: string) =>
@@ -222,6 +237,7 @@ function FeaturesPanel() {
     setSaving(true);
     try {
       await updateMyOrgSettings(settings);
+      queryClient.invalidateQueries({ queryKey: queryKeys.organizations.me });
     } finally {
       setSaving(false);
     }
@@ -249,52 +265,45 @@ function FeaturesPanel() {
 }
 
 function AccessPanel() {
-  const [joinCode, setJoinCode] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const queryClient = useQueryClient();
+  const [actionError, setActionError] = useState("");
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
+  const { data, isLoading: loading, isError } = useQuery({
+    queryKey: queryKeys.organizations.joinCode,
+    queryFn: async () => {
       try {
-        const res = await getJoinCode();
-        if (!cancelled) setJoinCode((res.joinCode ?? "").toUpperCase());
+        return await getJoinCode();
       } catch {
-        try {
-          const org = await getMyOrganization();
-          if (!cancelled) setJoinCode((org.joinCode ?? "").toUpperCase());
-        } catch {
-          if (!cancelled) setError("Could not load the join code.");
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
+        const org = await getMyOrganization();
+        return { id: org.id, joinCode: org.joinCode ?? "" };
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    },
+  });
+  const joinCode = (data?.joinCode ?? "").toUpperCase();
+  const error = actionError || (isError ? "Could not load the join code." : "");
 
-  const rotate = async () => {
-    setError("");
-    if (joinCode && !window.confirm("The old code will stop working immediately. Generate a new one?")) return;
-    setBusy(true);
-    try {
-      const res = await rotateJoinCode();
+  const rotateMutation = useMutation({
+    mutationFn: rotateJoinCode,
+    onSuccess: (res) => {
       const next = (res.joinCode ?? "").toUpperCase();
       if (!next) {
-        setError("The server did not return an access code. Try again.");
+        setActionError("The server did not return an access code. Try again.");
         return;
       }
-      setJoinCode(next);
-    } catch (err: any) {
-      setError(err?.response?.data?.message ?? "Could not generate the access code.");
-    } finally {
-      setBusy(false);
-    }
+      queryClient.setQueryData(queryKeys.organizations.joinCode, res);
+      queryClient.invalidateQueries({ queryKey: queryKeys.organizations.me });
+    },
+    onError: (err: any) => {
+      setActionError(err?.response?.data?.message ?? "Could not generate the access code.");
+    },
+  });
+  const busy = rotateMutation.isPending;
+
+  const rotate = async () => {
+    setActionError("");
+    if (joinCode && !window.confirm("The old code will stop working immediately. Generate a new one?")) return;
+    rotateMutation.mutate();
   };
 
   const copy = async () => {

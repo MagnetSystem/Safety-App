@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Plus, Search, Shield, UserCog, X } from "lucide-react";
 import {
   activateStaff,
@@ -8,9 +9,11 @@ import {
   resetStaffPassword,
   type CreateStaffInput,
 } from "../../services/staffService";
-import { getDepartments, type Department } from "../../services/departmentsService";
+import { getDepartments } from "../../services/departmentsService";
 import { useAuth } from "../../context/AuthContext";
 import type { OrgRole, StaffMember } from "../../types/organization";
+import { queryKeys } from "../../lib/queryKeys";
+import type { Paginated } from "../../types/report";
 
 const EMPTY_FORM = {
   name: "",
@@ -32,28 +35,38 @@ export default function Team() {
   const canAddAdmin = role === "owner";
   const canManage = role === "owner" || role === "admin";
 
-  const [items, setItems] = useState<StaffMember[]>([]);
-  const [departments, setDepartments] = useState<Department[]>([]);
+  const queryClient = useQueryClient();
+  const staffKey = queryKeys.staff.list({ pageSize: 100 });
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
-  const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
 
-  const load = () => {
-    setLoading(true);
-    getStaff({ pageSize: 100 })
-      .then((res) => setItems(res.items))
-      .catch(() => setError("Could not load team members."))
-      .finally(() => setLoading(false));
-  };
+  const { data, isLoading: loading, isError } = useQuery({
+    queryKey: staffKey,
+    queryFn: () => getStaff({ pageSize: 100 }),
+  });
+  const items = data?.items ?? [];
+  const error = actionError || (isError ? "Could not load team members." : "");
 
-  useEffect(load, []);
-  useEffect(() => {
-    getDepartments().then(setDepartments).catch(() => undefined);
-  }, []);
+  const { data: departments = [] } = useQuery({
+    queryKey: queryKeys.departments.all,
+    queryFn: () => getDepartments().catch(() => []),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: createStaff,
+    onSuccess: () => {
+      setShowForm(false);
+      setForm(EMPTY_FORM);
+      queryClient.invalidateQueries({ queryKey: queryKeys.staff.all });
+    },
+    onError: (err: any) => {
+      setFormError(err?.response?.data?.message || "Could not create the account.");
+    },
+  });
+  const submitting = createMutation.isPending;
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,39 +76,36 @@ export default function Team() {
       setFormError("Only the owner can add admins.");
       return;
     }
-    setSubmitting(true);
-    try {
-      const payload: CreateStaffInput = {
-        name: form.name.trim(),
-        email: form.email.trim(),
-        password: form.password,
-        phone: form.phone.trim() || undefined,
-        orgRole: form.orgRole,
-        departmentIds: form.departmentIds.length ? form.departmentIds : undefined,
-      };
-      await createStaff(payload);
-      setShowForm(false);
-      setForm(EMPTY_FORM);
-      load();
-    } catch (err: any) {
-      setFormError(err?.response?.data?.message || "Could not create the account.");
-    } finally {
-      setSubmitting(false);
-    }
+    const payload: CreateStaffInput = {
+      name: form.name.trim(),
+      email: form.email.trim(),
+      password: form.password,
+      phone: form.phone.trim() || undefined,
+      orgRole: form.orgRole,
+      departmentIds: form.departmentIds.length ? form.departmentIds : undefined,
+    };
+    createMutation.mutate(payload);
   };
 
   const toggleStatus = async (member: StaffMember) => {
     if (member.orgRole === "OWNER") return;
     const wasActive = member.user.isActive;
-    setItems((prev) =>
-      prev.map((x) => (x.id === member.id ? { ...x, user: { ...x.user, isActive: !wasActive } } : x)),
+    queryClient.setQueryData<Paginated<StaffMember>>(staffKey, (old) =>
+      old
+        ? {
+            ...old,
+            items: old.items.map((x) =>
+              x.id === member.id ? { ...x, user: { ...x.user, isActive: !wasActive } } : x,
+            ),
+          }
+        : old,
     );
     try {
       if (wasActive) await deactivateStaff(member.id);
       else await activateStaff(member.id);
     } catch (err: any) {
-      setError(err?.response?.data?.message || "Could not update status.");
-      load();
+      setActionError(err?.response?.data?.message || "Could not update status.");
+      queryClient.invalidateQueries({ queryKey: queryKeys.staff.all });
     }
   };
 

@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Loader2, Eye, Download } from "lucide-react";
 import { getReports } from "../../services/incidentsService";
 import { formatEnum, type ComplaintStatus, type Report } from "../../types/report";
+import { queryKeys } from "../../lib/queryKeys";
 
 function toCsv(rows: Report[]): string {
   const header = ["Code", "Type", "Category", "Reporter", "Status", "Priority", "Created", "Location"];
@@ -46,17 +48,13 @@ const STATUS_TABS: { label: string; value: ComplaintStatus | "All" }[] = [
 
 export default function ReportsList() {
   const [filter, setFilter] = useState<ComplaintStatus | "All">("All");
-  const [reports, setReports] = useState<Report[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    setLoading(true);
-    getReports({ status: filter === "All" ? undefined : filter, pageSize: 50 })
-      .then((res) => setReports(res.items))
-      .catch(() => setError("Could not load reports."))
-      .finally(() => setLoading(false));
-  }, [filter]);
+  const { data, isLoading: loading, isError } = useQuery({
+    queryKey: queryKeys.reports.list(filter === "All" ? undefined : filter),
+    queryFn: () => getReports({ status: filter === "All" ? undefined : filter, pageSize: 50 }),
+    placeholderData: keepPreviousData,
+  });
+  const reports = data?.items ?? [];
+  const error = isError ? "Could not load reports." : "";
 
   return (
     <div className="p-4 sm:p-6 space-y-5 max-w-[1400px] mx-auto">

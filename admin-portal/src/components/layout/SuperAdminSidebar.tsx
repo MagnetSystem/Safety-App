@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   LayoutGrid, Building2, Search, FileWarning,
   ScrollText, Bell, Settings, PanelLeftClose, PanelLeftOpen, Layers,
@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { getNotifications } from "../../services/notificationsService";
+import { useUnreadNotificationCount } from "../../hooks/useUnreadNotificationCount";
 
 interface NavItem {
   icon: typeof LayoutGrid;
@@ -25,15 +25,9 @@ const generalItems: NavItem[] = [
 export default function SuperAdminSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const unreadCount = useUnreadNotificationCount();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    getNotifications({ unreadOnly: true, pageSize: 1 })
-      .then((res) => setUnreadCount(res.total))
-      .catch(() => undefined);
-  }, []);
 
   const systemItems: NavItem[] = [
     { icon: Search, label: "Search", to: "/super-admin/search" },

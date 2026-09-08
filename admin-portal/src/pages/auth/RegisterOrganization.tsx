@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import {
   Building2, User, ChevronRight, ChevronLeft,
   Check, Loader2, Eye, EyeOff, Shield,
@@ -7,6 +8,7 @@ import {
 import { registerOrganization } from "../../services/authService";
 import { getIndustryCatalog, type IndustryCatalog } from "../../services/departmentsService";
 import { useAuth } from "../../context/AuthContext";
+import { queryKeys } from "../../lib/queryKeys";
 
 const STEPS = [
   { id: 1, label: "Organization" },
@@ -152,7 +154,10 @@ export default function RegisterOrganization() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const [types, setTypes] = useState<IndustryCatalog[]>([]);
+  const { data: types = [] } = useQuery({
+    queryKey: queryKeys.industryCatalog,
+    queryFn: () => getIndustryCatalog().catch(() => [] as IndustryCatalog[]),
+  });
   const [industry, setIndustry] = useState("EDUCATION");
   const [org, setOrg] = useState({
     name: "", code: "", state: "", district: "",
@@ -164,13 +169,8 @@ export default function RegisterOrganization() {
   });
 
   useEffect(() => {
-    getIndustryCatalog()
-      .then((list) => {
-        setTypes(list);
-        if (list[0] && !list.find((t) => t.id === industry)) setIndustry(list[0].id);
-      })
-      .catch(() => undefined);
-  }, []);
+    if (types[0] && !types.find((t) => t.id === industry)) setIndustry(types[0].id);
+  }, [types, industry]);
 
   const setO = (k: keyof typeof org) => (v: string) => setOrg((p) => ({ ...p, [k]: v }));
   const setOwn = (k: keyof typeof owner) => (v: string) => setOwner((p) => ({ ...p, [k]: v }));

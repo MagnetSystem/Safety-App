@@ -1,37 +1,50 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Search, Plus, Loader2, X } from "lucide-react";
 import {
   getStaff, createStaff, activateStaff, deactivateStaff, resetStaffPassword,
   type CreateStaffInput,
 } from "../../services/staffService";
 import { getOrganizations } from "../../services/organizationsService";
-import type { CollegeAdmin, College } from "../../types/organization";
+import type { CollegeAdmin } from "../../types/organization";
+import { queryKeys } from "../../lib/queryKeys";
+import type { Paginated } from "../../types/report";
 
 const EMPTY_FORM = { name: "", email: "", password: "", phone: "", collegeId: "" };
 
 export default function Staff() {
-  const [admins, setAdmins] = useState<CollegeAdmin[]>([]);
-  const [colleges, setColleges] = useState<College[]>([]);
+  const queryClient = useQueryClient();
+  const staffKey = queryKeys.staff.list({ pageSize: 100 });
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
-  const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
 
-  const load = () => {
-    setLoading(true);
-    getStaff({ pageSize: 100 })
-      .then((res) => setAdmins(res.items))
-      .catch(() => setError("Could not load staff."))
-      .finally(() => setLoading(false));
-  };
+  const { data, isLoading: loading, isError } = useQuery({
+    queryKey: staffKey,
+    queryFn: () => getStaff({ pageSize: 100 }),
+  });
+  const admins = data?.items ?? [];
+  const error = isError ? "Could not load staff." : "";
 
-  useEffect(load, []);
-  useEffect(() => {
-    getOrganizations({ pageSize: 200 }).then((res) => setColleges(res.items)).catch(() => undefined);
-  }, []);
+  const { data: orgsData } = useQuery({
+    queryKey: queryKeys.organizations.list({ pageSize: 200 }),
+    queryFn: () => getOrganizations({ pageSize: 200 }),
+  });
+  const colleges = orgsData?.items ?? [];
+
+  const createMutation = useMutation({
+    mutationFn: (input: CreateStaffInput) => createStaff(input),
+    onSuccess: () => {
+      setShowForm(false);
+      setForm(EMPTY_FORM);
+      queryClient.invalidateQueries({ queryKey: queryKeys.staff.all });
+    },
+    onError: (err: any) => {
+      setFormError(err?.response?.data?.message || "Could not create staff account.");
+    },
+  });
+  const submitting = createMutation.isPending;
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,27 +53,26 @@ export default function Staff() {
       setFormError("Please select an organization.");
       return;
     }
-    setSubmitting(true);
-    try {
-      await createStaff(form as CreateStaffInput);
-      setShowForm(false);
-      setForm(EMPTY_FORM);
-      load();
-    } catch (err: any) {
-      setFormError(err?.response?.data?.message || "Could not create staff account.");
-    } finally {
-      setSubmitting(false);
-    }
+    createMutation.mutate(form as CreateStaffInput);
   };
 
   const toggleStatus = async (a: CollegeAdmin) => {
     const wasActive = a.user.isActive;
-    setAdmins((prev) => prev.map((x) => (x.id === a.id ? { ...x, user: { ...x.user, isActive: !wasActive } } : x)));
+    queryClient.setQueryData<Paginated<CollegeAdmin>>(staffKey, (old) =>
+      old
+        ? {
+            ...old,
+            items: old.items.map((x) =>
+              x.id === a.id ? { ...x, user: { ...x.user, isActive: !wasActive } } : x,
+            ),
+          }
+        : old,
+    );
     try {
       if (wasActive) await deactivateStaff(a.id);
       else await activateStaff(a.id);
     } catch {
-      load();
+      queryClient.invalidateQueries({ queryKey: queryKeys.staff.all });
     }
   };
 

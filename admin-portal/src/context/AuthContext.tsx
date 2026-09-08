@@ -1,5 +1,6 @@
 import { createContext, useContext, useState } from 'react';
 import type { ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { loginUser, getMe } from '../services/authService';
 import { toAppRole, type Role, type User } from '../types/user';
 
@@ -26,6 +27,7 @@ function persist(user: User | null) {
 }
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<User | null>(loadStoredUser);
 
   const isAuthenticated = !!user && !!user.role;
@@ -33,6 +35,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const applySession: AuthContextType['applySession'] = async (tokens, extras = {}) => {
     localStorage.setItem('accessToken', tokens.accessToken);
     localStorage.setItem('refreshToken', tokens.refreshToken);
+    queryClient.clear();
     const appRole = toAppRole(tokens.user.role);
     let name = extras.name ?? user?.name ?? tokens.user.email.split('@')[0];
     let organizationName = extras.organizationName ?? null;
@@ -73,6 +76,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const logout = () => {
+    queryClient.clear();
     setUser(null);
     persist(null);
     localStorage.removeItem('accessToken');

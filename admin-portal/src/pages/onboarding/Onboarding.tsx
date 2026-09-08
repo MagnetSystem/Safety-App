@@ -1,33 +1,31 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { Check, ChevronRight, Copy, Loader2, Shield } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { getIndustryCatalog, type IndustryCatalog } from "../../services/departmentsService";
-import api from "../../services/api";
+import { getMyOrganization } from "../../services/organizationsService";
+import { queryKeys } from "../../lib/queryKeys";
 
 export default function Onboarding() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [step, setStep] = useState(0);
-  const [catalog, setCatalog] = useState<IndustryCatalog[]>([]);
-  const [joinCode, setJoinCode] = useState<string>("");
-  const [orgIndustry, setOrgIndustry] = useState("");
-  const [orgName, setOrgName] = useState("");
-  const [typeLabel, setTypeLabel] = useState("");
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    Promise.all([
-      getIndustryCatalog().catch(() => [] as IndustryCatalog[]),
-      api.get("/organizations/me").then((r) => r.data).catch(() => null),
-    ]).then(([industries, org]) => {
-      setCatalog(industries);
-      setJoinCode(org?.joinCode ?? "");
-      setOrgIndustry(org?.industry ?? org?.organizationType?.slug ?? "");
-      setOrgName(org?.name ?? "");
-      setTypeLabel(org?.organizationType?.label ?? "");
-    }).finally(() => setLoading(false));
-  }, []);
+  const catalogQuery = useQuery({
+    queryKey: queryKeys.industryCatalog,
+    queryFn: () => getIndustryCatalog().catch(() => [] as IndustryCatalog[]),
+  });
+  const orgQuery = useQuery({
+    queryKey: queryKeys.organizations.me,
+    queryFn: () => getMyOrganization().catch(() => null),
+  });
+  const catalog = catalogQuery.data ?? [];
+  const org = orgQuery.data;
+  const joinCode = org?.joinCode ?? "";
+  const orgIndustry = org?.industry ?? org?.organizationType?.slug ?? "";
+  const orgName = org?.name ?? "";
+  const typeLabel = org?.organizationType?.label ?? "";
+  const loading = catalogQuery.isLoading || orgQuery.isLoading;
 
   const handleFinish = () => {
     localStorage.removeItem("safety_onboarding");

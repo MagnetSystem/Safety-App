@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, AlertTriangle, FileText, Upload, Loader2, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
@@ -8,6 +8,8 @@ import {
   markAllNotificationsRead,
   type AppNotification,
 } from "../../services/notificationsService";
+import { queryKeys } from "../../lib/queryKeys";
+import type { Paginated } from "../../types/report";
 
 function iconFor(type: string) {
   if (type.includes("EMERGENCY")) return { icon: <AlertTriangle size={18} />, cls: "bg-destructive/15 text-destructive" };
@@ -30,17 +32,19 @@ function timeAgo(iso: string) {
 export default function Notifications() {
   const { role } = useAuth();
   const navigate = useNavigate();
-  const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const listKey = queryKeys.notifications.list(50);
+  const { data, isLoading: loading } = useQuery({
+    queryKey: listKey,
+    queryFn: () => getNotifications({ pageSize: 50 }),
+  });
+  const notifications = data?.items ?? [];
 
-  const load = () => {
-    setLoading(true);
-    getNotifications({ pageSize: 50 })
-      .then((res) => setNotifications(res.items))
-      .finally(() => setLoading(false));
+  const patchList = (updater: (items: AppNotification[]) => AppNotification[]) => {
+    queryClient.setQueryData<Paginated<AppNotification>>(listKey, (old) =>
+      old ? { ...old, items: updater(old.items) } : old,
+    );
   };
-
-  useEffect(load, []);
 
   const handleClick = async (n: AppNotification) => {
     if (n.data?.complaintId) {
@@ -50,18 +54,20 @@ export default function Notifications() {
     
     if (n.isRead) return;
     
-    setNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, isRead: true } : x)));
+    patchList((prev) => prev.map((x) => (x.id === n.id ? { ...x, isRead: true } : x)));
     try {
       await markNotificationRead(n.id);
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
     } catch {
       // best-effort
     }
   };
 
   const handleMarkAll = async () => {
-    setNotifications((prev) => prev.map((x) => ({ ...x, isRead: true })));
+    patchList((prev) => prev.map((x) => ({ ...x, isRead: true })));
     try {
       await markAllNotificationsRead();
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
     } catch {
       // best-effort
     }

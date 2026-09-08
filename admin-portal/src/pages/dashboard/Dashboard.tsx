@@ -1,25 +1,22 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle, Clock, CheckCircle2, FileText,
   Search, Users, Loader2,
 } from "lucide-react";
-import { getOrgDashboard, type OrgDashboard } from "../../services/dashboardService";
+import { getOrgDashboard } from "../../services/dashboardService";
 import { formatEnum } from "../../types/report";
+import { queryKeys } from "../../lib/queryKeys";
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [data, setData] = useState<OrgDashboard | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [query, setQuery] = useState("");
-
-  useEffect(() => {
-    getOrgDashboard()
-      .then(setData)
-      .catch(() => setError("Could not load dashboard data."))
-      .finally(() => setLoading(false));
-  }, []);
+  const { data, isLoading: loading, isError } = useQuery({
+    queryKey: queryKeys.orgDashboard,
+    queryFn: getOrgDashboard,
+  });
+  const error = isError ? "Could not load dashboard data." : "";
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();

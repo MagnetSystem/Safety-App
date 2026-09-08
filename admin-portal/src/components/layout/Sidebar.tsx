@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   LayoutGrid,
   FileWarning,
@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { getNotifications } from "../../services/notificationsService";
+import { useUnreadNotificationCount } from "../../hooks/useUnreadNotificationCount";
 
 interface NavItem {
   icon: typeof LayoutGrid;
@@ -32,16 +32,10 @@ interface NavItem {
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const unreadCount = useUnreadNotificationCount();
   const [showProfile, setShowProfile] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    getNotifications({ unreadOnly: true, pageSize: 1 })
-      .then((res) => setUnreadCount(res.total))
-      .catch(() => undefined);
-  }, []);
 
   const navItems: NavItem[] = [
     { icon: LayoutGrid, label: "Dashboard", to: "/" },

@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Loader2, Plus, ToggleLeft, ToggleRight } from "lucide-react";
 import {
   createOrganizationType,
   duplicateOrganizationType,
   listOrganizationTypes,
   setOrganizationTypeActive,
-  type OrganizationTypeRecord,
   type UpsertOrganizationType,
 } from "../../services/organizationTypesService";
+import { queryKeys } from "../../lib/queryKeys";
 
 const EMPTY_FEATURES = {
   guardianAlerts: false,
@@ -34,28 +35,27 @@ function slugKey(label: string) {
 }
 
 export default function OrganizationTypes() {
-  const [rows, setRows] = useState<OrganizationTypeRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const queryClient = useQueryClient();
+  const [actionError, setActionError] = useState("");
   const [wizard, setWizard] = useState(false);
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<UpsertOrganizationType>(emptyDraft());
-  const [saving, setSaving] = useState(false);
   const [fieldLabel, setFieldLabel] = useState("");
   const [fieldType, setFieldType] = useState("text");
   const [fieldRequired, setFieldRequired] = useState(false);
   const [catLabel, setCatLabel] = useState("");
   const [deptName, setDeptName] = useState("");
 
-  const load = () => {
-    setLoading(true);
-    listOrganizationTypes()
-      .then(setRows)
-      .catch(() => setError("Could not load organization types."))
-      .finally(() => setLoading(false));
-  };
+  const { data: rows = [], isLoading: loading, isError } = useQuery({
+    queryKey: queryKeys.organizationTypes.all,
+    queryFn: listOrganizationTypes,
+  });
+  const error = actionError || (isError ? "Could not load organization types." : "");
 
-  useEffect(load, []);
+  const invalidateTypes = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.organizationTypes.all });
+    queryClient.invalidateQueries({ queryKey: queryKeys.industryCatalog });
+  };
 
   const canCreate = draft.label.trim().length > 1 && draft.memberFields.length > 0;
 
@@ -91,20 +91,23 @@ export default function OrganizationTypes() {
     setDeptName("");
   };
 
-  const submit = async () => {
-    setSaving(true);
-    setError("");
-    try {
-      await createOrganizationType(draft);
+  const createMutation = useMutation({
+    mutationFn: createOrganizationType,
+    onSuccess: () => {
       setWizard(false);
       setDraft(emptyDraft());
       setStep(0);
-      load();
-    } catch (err: any) {
-      setError(err?.response?.data?.message ?? "Could not save this type.");
-    } finally {
-      setSaving(false);
-    }
+      invalidateTypes();
+    },
+    onError: (err: any) => {
+      setActionError(err?.response?.data?.message ?? "Could not save this type.");
+    },
+  });
+  const saving = createMutation.isPending;
+
+  const submit = async () => {
+    setActionError("");
+    createMutation.mutate(draft);
   };
 
   const preview = useMemo(() => draft.memberFields, [draft.memberFields]);
@@ -164,7 +167,7 @@ export default function OrganizationTypes() {
                         const label = window.prompt("Name for the copy", `${row.label} (copy)`);
                         if (!label) return;
                         await duplicateOrganizationType(row.dbId, label);
-                        load();
+                        invalidateTypes();
                       }}
                       className="text-xs text-slate-500 hover:text-teal-700 inline-flex items-center gap-1"
                     >
@@ -174,7 +177,7 @@ export default function OrganizationTypes() {
                       <button
                         onClick={async () => {
                           await setOrganizationTypeActive(row.dbId, !row.isActive);
-                          load();
+                          invalidateTypes();
                         }}
                         className="text-xs text-slate-500 hover:text-teal-700 inline-flex items-center gap-1"
                       >

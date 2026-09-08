@@ -1,31 +1,28 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { Search as SearchIcon, Loader2 } from "lucide-react";
-import { search as runSearch, type SearchResult } from "../../services/searchService";
+import { search as runSearch } from "../../services/searchService";
 import { useAuth } from "../../context/AuthContext";
 import { formatEnum } from "../../types/report";
+import { useDebouncedValue } from "../../hooks/useDebouncedValue";
+import { queryKeys } from "../../lib/queryKeys";
 
 export default function SearchPage() {
   const { role } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [query, setQuery] = useState(params.get("q") ?? "");
-  const [results, setResults] = useState<SearchResult | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (query.trim().length < 2) {
-      setResults(null);
-      return;
-    }
-    const handle = setTimeout(() => {
-      setLoading(true);
-      runSearch(query.trim())
-        .then(setResults)
-        .finally(() => setLoading(false));
-    }, 300);
-    return () => clearTimeout(handle);
-  }, [query]);
+  const liveQuery = query.trim();
+  const debouncedQuery = useDebouncedValue(liveQuery, 300);
+  const canSearch = debouncedQuery.length >= 2;
+  const { data, isFetching } = useQuery({
+    queryKey: queryKeys.search(debouncedQuery),
+    queryFn: () => runSearch(debouncedQuery),
+    enabled: canSearch,
+  });
+  const loading = liveQuery.length >= 2 && liveQuery === debouncedQuery && isFetching;
+  const results = liveQuery.length < 2 || loading ? undefined : data;
 
   const reportsBase = role === "support" ? "/super-admin" : "";
 

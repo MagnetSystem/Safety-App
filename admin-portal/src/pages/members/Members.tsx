@@ -1,28 +1,24 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Search, Loader2, X, Phone, Mail, Droplets, BookOpen, MapPin, Calendar } from "lucide-react";
 import { getMembers, resetMemberPassword } from "../../services/membersService";
 import type { Student } from "../../types/organization";
 import { useAuth } from "../../context/AuthContext";
+import { useDebouncedValue } from "../../hooks/useDebouncedValue";
+import { queryKeys } from "../../lib/queryKeys";
 
 export default function Members() {
   const { role } = useAuth();
-  const [students, setStudents] = useState<Student[]>([]);
   const [query, setQuery] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const debouncedQuery = useDebouncedValue(query, query ? 300 : 0);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-
-  useEffect(() => {
-    const delay = query ? 300 : 0;
-    const handle = setTimeout(() => {
-      setLoading(true);
-      getMembers({ search: query || undefined, pageSize: 50 })
-        .then((res) => setStudents(res.items))
-        .catch(() => setError("Could not load members."))
-        .finally(() => setLoading(false));
-    }, delay);
-    return () => clearTimeout(handle);
-  }, [query]);
+  const { data, isLoading: loading, isError } = useQuery({
+    queryKey: queryKeys.members.list(debouncedQuery || undefined),
+    queryFn: () => getMembers({ search: debouncedQuery || undefined, pageSize: 50 }),
+    placeholderData: keepPreviousData,
+  });
+  const students = data?.items ?? [];
+  const error = isError ? "Could not load members." : "";
 
   const handleResetPassword = async (s: Student) => {
     const newPassword = window.prompt(`New password for ${s.user?.email || s.name} (min 8 characters):`);
