@@ -50,16 +50,6 @@ export const updateMyProfile = async (input: { name?: string; phone?: string }) 
   return data;
 };
 
-export const enterOrganization = async (organizationId: string) => {
-  const { data } = await api.post<LoginResponse>(`/auth/support/organizations/${organizationId}/enter`);
-  return data;
-};
-
-export const leaveOrganization = async () => {
-  const { data } = await api.post<LoginResponse>('/auth/support/leave-organization');
-  return data;
-};
-
 export const forgotPassword = async (email: string) => {
   const { data } = await api.post<{ message: string }>('/auth/forgot-password', { email });
   return data;

@@ -37,7 +37,7 @@ export const queryKeys = {
     all: ["organizations"] as const,
     list: (params: { search?: string; pageSize?: number } = {}) =>
       ["organizations", "list", params.search ?? "", params.pageSize ?? 100] as const,
-    detail: (id: string) => ["organizations", "detail", id] as const,
+    detail: (id: string) => ["org-detail", id] as const,
     me: ["organizations", "me"] as const,
     joinCode: ["organizations", "join-code"] as const,
   },

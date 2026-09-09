@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, Plus, Building2, Loader2, X, LogIn, KeyRound } from "lucide-react";
+import { Search, Plus, Building2, Loader2, X, KeyRound } from "lucide-react";
 import {
   getOrganizations,
   createOrganization,
@@ -11,8 +11,6 @@ import {
 } from "../../services/organizationsService";
 import { getIndustryCatalog, type IndustryCatalog } from "../../services/departmentsService";
 import { onboardClient } from "../../services/organizationTypesService";
-import { enterOrganization } from "../../services/authService";
-import { useAuth } from "../../context/AuthContext";
 import type { Organization } from "../../types/organization";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { queryKeys } from "../../lib/queryKeys";
@@ -33,7 +31,6 @@ const EMPTY_FORM: CreateOrganizationInput & { ownerName: string; ownerEmail: str
 };
 
 export default function Organizations() {
-  const { user, applySession } = useAuth();
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState("All");
   const [search, setSearch] = useState("");
@@ -46,8 +43,8 @@ export default function Organizations() {
   const [joinResult, setJoinResult] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [listPreview, setListPreview] = useState<OrgDetail | null>(null);
-  const [entering, setEntering] = useState(false);
   const [ownerPassword, setOwnerPassword] = useState("");
+  const [showResetPassword, setShowResetPassword] = useState(false);
   const [resetBusy, setResetBusy] = useState(false);
   const [resetMessage, setResetMessage] = useState("");
   const [resetError, setResetError] = useState("");
@@ -58,7 +55,7 @@ export default function Organizations() {
     queryFn: () => getOrganizations({ search: debouncedSearch || undefined, pageSize: 100 }),
     placeholderData: keepPreviousData,
   });
-  const colleges = data?.items ?? [];
+  const colleges = Array.isArray(data?.items) ? data.items : [];
   const error = actionError || (isError ? "Could not load organizations." : "");
 
   const { data: types = [] } = useQuery({
@@ -69,7 +66,7 @@ export default function Organizations() {
   const { data: fetchedDetail, isFetching: detailLoading } = useQuery({
     queryKey: queryKeys.organizations.detail(selectedId ?? ""),
     queryFn: () => getOrganization(selectedId!),
-    enabled: !!selectedId,
+    enabled: Boolean(selectedId),
   });
 
   const detail = selectedId ? ((fetchedDetail as OrgDetail | undefined) ?? listPreview) : null;
@@ -77,6 +74,15 @@ export default function Organizations() {
   useEffect(() => {
     if (fetchedDetail) setListPreview(fetchedDetail as OrgDetail);
   }, [fetchedDetail]);
+
+  const closeDrawer = () => {
+    setSelectedId(null);
+    setListPreview(null);
+    setResetMessage("");
+    setResetError("");
+    setOwnerPassword("");
+    setShowResetPassword(false);
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -131,25 +137,9 @@ export default function Organizations() {
     setResetMessage("");
     setResetError("");
     setOwnerPassword("");
+    setShowResetPassword(false);
     setSelectedId(c.id);
-    setListPreview(c);
-  };
-
-  const enterOrg = async (org: { id: string; name: string }) => {
-    setEntering(true);
-    setActionError("");
-    try {
-      const tokens = await enterOrganization(org.id);
-      await applySession(tokens, {
-        organizationId: org.id,
-        organizationName: org.name,
-        supportSession: { organizationId: org.id, organizationName: org.name },
-      });
-    } catch (err: any) {
-      setActionError(err?.response?.data?.message || "Could not enter this organization.");
-    } finally {
-      setEntering(false);
-    }
+    setListPreview({ ...c });
   };
 
   const handleResetOwnerPassword = async () => {
@@ -193,6 +183,11 @@ export default function Organizations() {
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
+            type="search"
+            name="organization-search"
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search organizations..."
@@ -202,6 +197,7 @@ export default function Organizations() {
         <div className="flex gap-2">
           {["All", "Active", "Suspended"].map((s) => (
             <button
+              type="button"
               key={s}
               onClick={() => setFilter(s)}
               className={`px-3 py-1.5 rounded-full text-sm font-medium transition ${
@@ -220,7 +216,8 @@ export default function Organizations() {
         </div>
       )}
 
-      <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl overflow-hidden">
+      <div className={`grid gap-5 items-start ${detail ? "xl:grid-cols-[minmax(0,1fr)_24rem]" : ""}`}>
+      <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl overflow-hidden min-w-0">
         {loading ? (
           <div className="flex items-center justify-center py-16 text-muted-foreground">
             <Loader2 className="animate-spin mr-2" size={18} /> Loading organizations…
@@ -247,7 +244,7 @@ export default function Organizations() {
                   <tr
                     key={c.id}
                     className={`border-b border-border last:border-0 hover:bg-muted/30 ${
-                      user?.supportSession?.organizationId === c.id ? "bg-amber-50/80" : ""
+                      selectedId === c.id ? "bg-teal-50" : ""
                     }`}
                   >
                     <td className="px-4 py-3">
@@ -277,13 +274,6 @@ export default function Organizations() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => enterOrg(c)}
-                          disabled={entering}
-                          className="text-xs font-medium px-2.5 py-1 rounded-lg border border-amber-300 text-amber-800 hover:bg-amber-50"
-                        >
-                          Enter
-                        </button>
-                        <button
                           onClick={() => toggleStatus(c)}
                           className={`text-xs font-medium px-2.5 py-1 rounded-lg border ${
                             c.status === "ACTIVE"
@@ -301,6 +291,108 @@ export default function Organizations() {
             </table>
           </div>
         )}
+      </div>
+
+      {detail && (
+        <aside className="rounded-xl border border-border bg-card shadow-sm p-6 space-y-5 xl:sticky xl:top-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">Organization</p>
+              <h2 className="text-lg font-semibold mt-1">{detail.name}</h2>
+              <p className="text-sm text-muted-foreground">
+                {detail.organizationType?.label ?? detail.industry ?? "Type not set"} · {detail.code}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={closeDrawer}
+              className="p-1 rounded-lg hover:bg-muted"
+              aria-label="Close details"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {detailLoading && (
+            <div className="flex items-center text-sm text-muted-foreground">
+              <Loader2 className="animate-spin mr-2" size={16} /> Loading details…
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <DetailField label="Status" value={detail.status === "ACTIVE" ? "Active" : "Suspended"} />
+            <DetailField label="Join code" value={detail.joinCode ?? "—"} mono />
+            <DetailField label="State" value={detail.state ?? "—"} />
+            <DetailField label="District" value={detail.district ?? "—"} />
+            <DetailField label="Members" value={String(detail._count?.members ?? detail._count?.students ?? 0)} />
+            <DetailField label="Staff" value={String(detail._count?.staff ?? detail._count?.admins ?? 0)} />
+            <DetailField label="Cases" value={String(detail._count?.incidents ?? 0)} />
+            <DetailField label="Departments" value={String(detail._count?.departments ?? detail.departments?.length ?? 0)} />
+          </div>
+
+          {detail.staff?.[0] && (
+            <div className="rounded-xl border border-border p-4 text-sm space-y-1">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Owner</p>
+              <p className="font-medium">{detail.staff[0].name}</p>
+              <p className="text-muted-foreground">{detail.staff[0].user.email}</p>
+            </div>
+          )}
+
+          {detail.departments && detail.departments.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Departments</p>
+              <div className="flex flex-wrap gap-1.5">
+                {detail.departments.map((d) => (
+                  <span key={d.id} className="px-2 py-0.5 rounded-full bg-muted text-xs">
+                    {d.name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-xl border border-border p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <KeyRound size={16} className="text-slate-500" />
+              <h3 className="font-medium text-sm">Reset owner password</h3>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Sets a temporary password for the owner login. Share it out of band. This action is written to the audit log.
+            </p>
+            {resetMessage && <div className="px-3 py-2 rounded-lg bg-teal-50 text-teal-800 text-xs">{resetMessage}</div>}
+            {resetError && <div className="px-3 py-2 rounded-lg bg-red-50 text-red-700 text-xs">{resetError}</div>}
+            {showResetPassword ? (
+              <>
+                <input
+                  type="password"
+                  name="owner-temp-password"
+                  autoComplete="new-password"
+                  value={ownerPassword}
+                  onChange={(e) => setOwnerPassword(e.target.value)}
+                  placeholder="New password (min 8)"
+                  className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm"
+                />
+                <button
+                  type="button"
+                  disabled={resetBusy}
+                  onClick={handleResetOwnerPassword}
+                  className="w-full py-2 rounded-lg border border-border text-sm font-medium hover:bg-muted disabled:opacity-60"
+                >
+                  {resetBusy ? "Updating…" : "Reset password"}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowResetPassword(true)}
+                className="w-full py-2 rounded-lg border border-border text-sm font-medium hover:bg-muted"
+              >
+                Set a temporary password
+              </button>
+            )}
+          </div>
+        </aside>
+      )}
       </div>
 
       {showForm && (
@@ -362,104 +454,6 @@ export default function Organizations() {
               {submitting ? "Creating…" : "Create organization + owner"}
             </button>
           </form>
-        </div>
-      )}
-
-      {detail && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/30 backdrop-blur-sm">
-          <button type="button" aria-label="Close details" className="flex-1" onClick={() => { setSelectedId(null); setListPreview(null); }} />
-          <aside className="w-full max-w-md h-full bg-card border-l border-border shadow-xl overflow-y-auto p-6 space-y-5">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">Organization</p>
-                <h2 className="text-lg font-semibold mt-1">{detail.name}</h2>
-                <p className="text-sm text-muted-foreground">
-                  {detail.organizationType?.label ?? detail.industry ?? "Type not set"} · {detail.code}
-                </p>
-              </div>
-              <button type="button" onClick={() => { setSelectedId(null); setListPreview(null); }} className="p-1 rounded-lg hover:bg-muted">
-                <X size={18} />
-              </button>
-            </div>
-
-            {detailLoading && (
-              <div className="flex items-center text-sm text-muted-foreground">
-                <Loader2 className="animate-spin mr-2" size={16} /> Loading details…
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <DetailField label="Status" value={detail.status === "ACTIVE" ? "Active" : "Suspended"} />
-              <DetailField label="Join code" value={detail.joinCode ?? "—"} mono />
-              <DetailField label="State" value={detail.state ?? "—"} />
-              <DetailField label="District" value={detail.district ?? "—"} />
-              <DetailField label="Members" value={String(detail._count?.members ?? detail._count?.students ?? 0)} />
-              <DetailField label="Staff" value={String(detail._count?.staff ?? detail._count?.admins ?? 0)} />
-              <DetailField label="Cases" value={String(detail._count?.incidents ?? 0)} />
-              <DetailField label="Departments" value={String(detail._count?.departments ?? detail.departments?.length ?? 0)} />
-            </div>
-
-            {detail.staff?.[0] && (
-              <div className="rounded-xl border border-border p-4 text-sm space-y-1">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Owner</p>
-                <p className="font-medium">{detail.staff[0].name}</p>
-                <p className="text-muted-foreground">{detail.staff[0].user.email}</p>
-              </div>
-            )}
-
-            {detail.departments && detail.departments.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Departments</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {detail.departments.map((d) => (
-                    <span key={d.id} className="px-2 py-0.5 rounded-full bg-muted text-xs">
-                      {d.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <button
-              type="button"
-              disabled={entering}
-              onClick={() => enterOrg(detail)}
-              className="w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-lg bg-amber-500 text-amber-950 font-medium text-sm hover:bg-amber-400 disabled:opacity-60"
-            >
-              {entering ? <Loader2 size={16} className="animate-spin" /> : <LogIn size={16} />}
-              Enter organization
-            </button>
-            <p className="text-[11px] text-muted-foreground">
-              Opens a support session. Case views are audited. Use Leave in the banner when finished.
-            </p>
-
-            <div className="rounded-xl border border-border p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <KeyRound size={16} className="text-slate-500" />
-                <h3 className="font-medium text-sm">Reset owner password</h3>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Sets a temporary password for the owner login. Share it out of band. This action is written to the audit log.
-              </p>
-              {resetMessage && <div className="px-3 py-2 rounded-lg bg-teal-50 text-teal-800 text-xs">{resetMessage}</div>}
-              {resetError && <div className="px-3 py-2 rounded-lg bg-red-50 text-red-700 text-xs">{resetError}</div>}
-              <input
-                type="password"
-                value={ownerPassword}
-                onChange={(e) => setOwnerPassword(e.target.value)}
-                placeholder="New password (min 8)"
-                className="w-full px-3 py-2 rounded-lg bg-background border border-border text-sm"
-              />
-              <button
-                type="button"
-                disabled={resetBusy}
-                onClick={handleResetOwnerPassword}
-                className="w-full py-2 rounded-lg border border-border text-sm font-medium hover:bg-muted disabled:opacity-60"
-              >
-                {resetBusy ? "Updating…" : "Reset password"}
-              </button>
-            </div>
-          </aside>
         </div>
       )}
     </div>

@@ -2,21 +2,10 @@ import { Outlet, useNavigate } from "react-router-dom";
 import { LogOut } from "lucide-react";
 import SuperAdminSidebar from "../components/layout/SuperAdminSidebar";
 import { useAuth } from "../context/AuthContext";
-import { leaveOrganization } from "../services/authService";
 
 export default function SuperAdminLayout() {
-  const { user, applySession, logout } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const session = user?.supportSession;
-
-  const leave = async () => {
-    try {
-      const tokens = await leaveOrganization();
-      await applySession(tokens, { supportSession: null, organizationName: null, organizationId: null });
-    } catch {
-      // Banner stays until leave succeeds so the operator is not silently unscoped.
-    }
-  };
 
   const handleLogout = () => {
     logout();
@@ -38,16 +27,6 @@ export default function SuperAdminLayout() {
             Logout
           </button>
         </header>
-        {session && (
-          <div className="bg-amber-500 text-amber-950 px-4 py-2 text-sm flex items-center justify-between gap-3">
-            <span>
-              Support session: viewing <strong>{session.organizationName}</strong>. Case contents are logged.
-            </span>
-            <button onClick={leave} className="px-3 py-1 rounded-lg bg-amber-950 text-white text-xs font-medium">
-              Leave
-            </button>
-          </div>
-        )}
         <main className="flex-1 overflow-y-auto">
           <Outlet />
         </main>

@@ -11,7 +11,6 @@ export interface User {
   /** @deprecated */
   collegeId: string | null;
   collegeName?: string | null;
-  supportSession?: { organizationId: string; organizationName: string } | null;
 }
 
 const ROLE_MAP: Record<BackendRole, Exclude<Role, null> | null> = {

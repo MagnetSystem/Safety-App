@@ -135,7 +135,9 @@ export default function Team() {
     }
   };
 
+  const ownerRow = items.find((m) => m.orgRole === "OWNER");
   const filtered = items.filter((m) => {
+    if (m.orgRole === "OWNER") return false;
     const q = search.toLowerCase();
     if (!q) return true;
     return (
@@ -191,12 +193,28 @@ export default function Team() {
         <div className="px-4 py-3 rounded-xl bg-red-50 text-red-700 text-sm border border-red-100">{error}</div>
       )}
 
+      {(ownerRow || role === "owner") && (
+        <div className="surface-card p-4 flex items-center gap-3">
+          <div className="h-10 w-10 rounded-lg bg-violet-50 text-violet-700 flex items-center justify-center shrink-0">
+            <Shield size={18} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Organization owner</p>
+            <p className="font-medium text-slate-900 truncate">{ownerRow?.name ?? user?.name}</p>
+            <p className="text-sm text-slate-500 truncate">{ownerRow?.user.email ?? user?.email}</p>
+          </div>
+          <p className="ml-auto hidden sm:block text-xs text-slate-400 max-w-[220px] text-right">
+            Created the organization. Not an admin or staff account.
+          </p>
+        </div>
+      )}
+
       <div className="surface-card overflow-hidden">
         {loading ? (
           <TableSkeleton />
         ) : filtered.length === 0 ? (
           <div className="py-16 text-center text-sm text-muted-foreground">
-            No team members yet. Add an admin or staff account to get started.
+            No admins or staff yet. Add an admin or staff account to get started.
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -217,7 +235,7 @@ export default function Team() {
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
                         <div className="h-9 w-9 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center shrink-0">
-                          {m.orgRole === "OWNER" ? <Shield size={16} /> : <UserCog size={16} />}
+                          <UserCog size={16} />
                         </div>
                         <span className="font-medium text-slate-900">{m.name}</span>
                       </div>
@@ -243,29 +261,25 @@ export default function Team() {
                       </span>
                     </td>
                     <td className="px-5 py-4 text-right space-x-2 whitespace-nowrap">
-                      {m.orgRole !== "OWNER" && (
-                        <>
-                          <button
-                            onClick={() => {
-                              setResetError("");
-                              setResetTarget(m);
-                            }}
-                            className="text-xs font-medium px-2.5 py-1 rounded-lg border border-border hover:bg-muted"
-                          >
-                            Reset password
-                          </button>
-                          <button
-                            onClick={() => toggleStatus(m)}
-                            className={`text-xs font-medium px-2.5 py-1 rounded-lg border ${
-                              m.user.isActive
-                                ? "border-red-200 text-red-600 hover:bg-red-50"
-                                : "border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                            }`}
-                          >
-                            {m.user.isActive ? "Suspend" : "Activate"}
-                          </button>
-                        </>
-                      )}
+                      <button
+                        onClick={() => {
+                          setResetError("");
+                          setResetTarget(m);
+                        }}
+                        className="text-xs font-medium px-2.5 py-1 rounded-lg border border-border hover:bg-muted"
+                      >
+                        Reset password
+                      </button>
+                      <button
+                        onClick={() => toggleStatus(m)}
+                        className={`text-xs font-medium px-2.5 py-1 rounded-lg border ${
+                          m.user.isActive
+                            ? "border-red-200 text-red-600 hover:bg-red-50"
+                            : "border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                        }`}
+                      >
+                        {m.user.isActive ? "Suspend" : "Activate"}
+                      </button>
                     </td>
                   </tr>
                 ))}

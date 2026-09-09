@@ -72,9 +72,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       organizationName,
       collegeId: organizationId,
       collegeName: organizationName,
-      supportSession: extras.supportSession ?? (appRole === 'support' && organizationId
-        ? { organizationId, organizationName: organizationName ?? 'Organization' }
-        : null),
     };
     setUser(next);
     persist(next);
