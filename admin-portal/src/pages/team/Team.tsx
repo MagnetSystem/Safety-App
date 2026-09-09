@@ -12,6 +12,7 @@ import {
 import { getDepartments } from "../../services/departmentsService";
 import { useAuth } from "../../context/AuthContext";
 import type { OrgRole, StaffMember } from "../../types/organization";
+import { canAddOrgAdmins, canManageOrgTeam } from "../../types/user";
 import { queryKeys } from "../../lib/queryKeys";
 import type { Paginated } from "../../types/report";
 
@@ -32,8 +33,8 @@ function roleLabel(role?: OrgRole | string) {
 
 export default function Team() {
   const { user, role } = useAuth();
-  const canAddAdmin = role === "owner";
-  const canManage = role === "owner" || role === "admin";
+  const canAddAdmin = canAddOrgAdmins(role);
+  const canManage = canManageOrgTeam(role);
 
   const queryClient = useQueryClient();
   const staffKey = queryKeys.staff.list({ pageSize: 100 });
@@ -147,7 +148,7 @@ export default function Team() {
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">Organization</p>
-          <h1 className="text-2xl font-semibold tracking-tight mt-1">Team</h1>
+          <h1 className="text-2xl font-semibold tracking-tight mt-1">Admins & Staff</h1>
           <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
             Add admins and staff for {user?.organizationName || "your organization"}. Admins can manage cases and staff;
             staff handle assigned cases.

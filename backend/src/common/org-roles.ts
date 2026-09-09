@@ -37,3 +37,13 @@ export function orgRoleToUserRole(orgRole: OrgRole): UserRole {
   if (orgRole === OrgRole.ADMIN) return UserRole.ADMIN;
   return UserRole.STAFF;
 }
+
+/** Prefer the higher of users.role and orgStaff.orgRole so owners are not downgraded. */
+export function effectiveOrgUserRole(userRole: UserRole, orgRole?: OrgRole | null): UserRole {
+  if (!orgRole) return userRole;
+  const fromOrg = orgRoleToUserRole(orgRole);
+  const userRank = ORG_RANK[userRole];
+  const orgRank = ORG_RANK[fromOrg];
+  if (userRank != null && orgRank != null) return orgRank >= userRank ? fromOrg : userRole;
+  return userRole;
+}

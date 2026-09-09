@@ -21,6 +21,7 @@ import {
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useUnreadNotificationCount } from "../../hooks/useUnreadNotificationCount";
+import { canManageOrgTeam } from "../../types/user";
 
 interface NavItem {
   icon: typeof LayoutGrid;
@@ -37,16 +38,19 @@ export default function Sidebar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const navItems: NavItem[] = [
+  const canManagePeople = canManageOrgTeam(user?.role);
+  const generalItems: NavItem[] = [
     { icon: LayoutGrid, label: "Dashboard", to: "/" },
     { icon: FileWarning, label: "Cases", to: "/reports" },
-    ...(user?.role === "staff"
-      ? []
-      : [
-          { icon: UserCog, label: "Team", to: "/team" },
-          { icon: Users, label: "Members", to: "/members" },
-          { icon: Building, label: "Departments", to: "/departments" },
-        ]),
+  ];
+  const organizationItems: NavItem[] = canManagePeople
+    ? [
+        { icon: UserCog, label: "Admins & Staff", to: "/team" },
+        { icon: Users, label: "Members", to: "/members" },
+        { icon: Building, label: "Departments", to: "/departments" },
+      ]
+    : [];
+  const utilityItems: NavItem[] = [
     { icon: Search, label: "Search", to: "/search" },
     { icon: Bell, label: "Notifications", to: "/notifications", badge: unreadCount || undefined },
     { icon: Settings, label: "Settings", to: "/settings" },
@@ -58,9 +62,9 @@ export default function Sidebar() {
   };
 
   const sidebarContent = (isMobile: boolean) => (
-    <>
+    <div className="flex flex-col h-full min-h-0">
       {/* Top bar with collapse icon */}
-      <div className={`flex items-center mb-4 ${collapsed && !isMobile ? "justify-center" : "justify-between px-1"}`}>
+      <div className={`shrink-0 flex items-center mb-4 ${collapsed && !isMobile ? "justify-center" : "justify-between px-1"}`}>
         {(!collapsed || isMobile) && (
           <span className="text-[11px] font-semibold text-slate-400 tracking-wider uppercase">
             Menu
@@ -92,7 +96,7 @@ export default function Sidebar() {
       <button
         onClick={() => setShowProfile(true)}
         className={`
-          flex items-center gap-2.5 mb-5 rounded-xl
+          shrink-0 flex items-center gap-2.5 mb-5 rounded-xl
           bg-white/40 hover:bg-white/60
           border border-white/50
           backdrop-blur-md
@@ -117,59 +121,31 @@ export default function Sidebar() {
         )}
       </button>
 
-      {/* GENERAL */}
-      <div className="mb-5">
-        {(!collapsed || isMobile) && (
-          <div className="flex items-center justify-between px-2.5 mb-1.5">
-            <p className="text-[10.5px] font-semibold text-slate-400 tracking-wider uppercase">
-              GENERAL
-            </p>
-            <button className="text-slate-400 hover:text-slate-600 transition-colors">
-              <MoreVertical size={14} />
-            </button>
-          </div>
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <NavSection
+          title="General"
+          items={generalItems}
+          collapsed={collapsed && !isMobile}
+          onItemClick={() => isMobile && setMobileOpen(false)}
+        />
+        {organizationItems.length > 0 && (
+          <NavSection
+            title="Organization"
+            items={organizationItems}
+            collapsed={collapsed && !isMobile}
+            onItemClick={() => isMobile && setMobileOpen(false)}
+          />
         )}
-
-        <nav className="flex flex-col gap-0.5">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.label}
-              to={item.to}
-              end={item.to === "/"}
-              title={collapsed && !isMobile ? item.label : undefined}
-              onClick={() => isMobile && setMobileOpen(false)}
-              className={({ isActive }) =>
-                `flex items-center rounded-lg text-[13.5px] font-medium transition-all duration-200
-                ${collapsed && !isMobile ? "justify-center p-2.5" : "justify-between px-2.5 py-2"}
-                ${
-                  isActive
-                    ? "bg-teal-50 text-teal-800 border border-teal-100"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-800 border border-transparent"
-                }`
-              }
-            >
-              <span className={`flex items-center ${collapsed && !isMobile ? "" : "gap-2.5"}`}>
-                <item.icon size={17} strokeWidth={2} />
-                {(!collapsed || isMobile) && item.label}
-              </span>
-
-              {(!collapsed || isMobile) && item.badge && (
-                <span className="bg-rose-500/90 text-white text-[10px] font-bold rounded-full h-4 w-4 flex items-center justify-center shadow-sm">
-                  {item.badge}
-                </span>
-              )}
-
-              {/* Show badge as a small dot when collapsed */}
-              {collapsed && !isMobile && item.badge && (
-                <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-rose-500" />
-              )}
-            </NavLink>
-          ))}
-        </nav>
+        <NavSection
+          title="Tools"
+          items={utilityItems}
+          collapsed={collapsed && !isMobile}
+          onItemClick={() => isMobile && setMobileOpen(false)}
+        />
       </div>
 
       {/* Logout */}
-      <div className="mt-auto pt-4 border-t border-white/30">
+      <div className="shrink-0 mt-auto pt-4 border-t border-white/30">
         <button
           onClick={handleLogout}
           className={`flex items-center rounded-lg text-[13.5px] font-medium transition-all duration-200 text-slate-600 hover:bg-red-50 hover:text-red-600 w-full
@@ -179,7 +155,7 @@ export default function Sidebar() {
           {(!collapsed || isMobile) && "Logout"}
         </button>
       </div>
-    </>
+    </div>
   );
 
   return (
@@ -283,5 +259,63 @@ export default function Sidebar() {
         </div>
       )}
     </>
+  );
+}
+
+function NavSection({
+  title,
+  items,
+  collapsed,
+  onItemClick,
+}: {
+  title: string;
+  items: NavItem[];
+  collapsed: boolean;
+  onItemClick?: () => void;
+}) {
+  return (
+    <div className="mb-5">
+      {!collapsed && (
+        <div className="flex items-center justify-between px-2.5 mb-1.5">
+          <p className="text-[10.5px] font-semibold text-slate-400 tracking-wider uppercase">
+            {title}
+          </p>
+          <MoreVertical size={14} className="text-slate-400" />
+        </div>
+      )}
+      <nav className="flex flex-col gap-0.5">
+        {items.map((item) => (
+          <NavLink
+            key={item.label}
+            to={item.to}
+            end={item.to === "/"}
+            title={collapsed ? item.label : undefined}
+            onClick={onItemClick}
+            className={({ isActive }) =>
+              `relative flex items-center rounded-lg text-[13.5px] font-medium transition-all duration-200
+              ${collapsed ? "justify-center p-2.5" : "justify-between px-2.5 py-2"}
+              ${
+                isActive
+                  ? "bg-teal-50 text-teal-800 border border-teal-100"
+                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-800 border border-transparent"
+              }`
+            }
+          >
+            <span className={`flex items-center ${collapsed ? "" : "gap-2.5"}`}>
+              <item.icon size={17} strokeWidth={2} />
+              {!collapsed && item.label}
+            </span>
+            {!collapsed && item.badge && (
+              <span className="bg-rose-500/90 text-white text-[10px] font-bold rounded-full h-4 w-4 flex items-center justify-center shadow-sm">
+                {item.badge}
+              </span>
+            )}
+            {collapsed && item.badge && (
+              <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-rose-500" />
+            )}
+          </NavLink>
+        ))}
+      </nav>
+    </div>
   );
 }

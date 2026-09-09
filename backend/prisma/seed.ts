@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole } from '@prisma/client';
+import { PrismaClient, OrgRole, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { INDUSTRY_CATALOG, catalogFor, settingsFor } from '../src/common/industry';
 
@@ -83,41 +83,47 @@ async function main() {
 
   const ownerEmail = 'admin@gec-demo.edu';
   const ownerPassword = 'ChangeMe123!';
-  await prisma.user.upsert({
+  const owner = await prisma.user.upsert({
     where: { email: ownerEmail },
-    update: {},
+    update: { role: UserRole.OWNER },
     create: {
       email: ownerEmail,
       passwordHash: await hash(ownerPassword),
       role: UserRole.OWNER,
-      orgStaff: {
-        create: {
-          name: 'Safety Owner',
-          phone: '+91-9800000001',
-          organizationId: organization.id,
-          orgRole: 'OWNER',
-        },
-      },
+    },
+  });
+  await prisma.orgStaff.upsert({
+    where: { userId: owner.id },
+    update: { orgRole: OrgRole.OWNER, name: 'Safety Owner', organizationId: organization.id },
+    create: {
+      userId: owner.id,
+      name: 'Safety Owner',
+      phone: '+91-9800000001',
+      organizationId: organization.id,
+      orgRole: OrgRole.OWNER,
     },
   });
   console.log(`Owner ready: ${ownerEmail} / ${ownerPassword}`);
 
   const staffEmail = 'staff@gec-demo.edu';
-  await prisma.user.upsert({
+  const staff = await prisma.user.upsert({
     where: { email: staffEmail },
-    update: {},
+    update: { role: UserRole.STAFF },
     create: {
       email: staffEmail,
       passwordHash: await hash('ChangeMe123!'),
       role: UserRole.STAFF,
-      orgStaff: {
-        create: {
-          name: 'Campus Responder',
-          phone: '+91-9800000002',
-          organizationId: organization.id,
-          orgRole: 'STAFF',
-        },
-      },
+    },
+  });
+  await prisma.orgStaff.upsert({
+    where: { userId: staff.id },
+    update: { orgRole: OrgRole.STAFF, name: 'Campus Responder', organizationId: organization.id },
+    create: {
+      userId: staff.id,
+      name: 'Campus Responder',
+      phone: '+91-9800000002',
+      organizationId: organization.id,
+      orgRole: OrgRole.STAFF,
     },
   });
   console.log(`Staff ready: ${staffEmail} / ChangeMe123!`);

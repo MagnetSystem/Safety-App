@@ -1,8 +1,8 @@
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { loginUser, getMe } from '../services/authService';
-import { toAppRole, type Role, type User } from '../types/user';
+import { resolveOrgAppRole, toAppRole, type Role, type User } from '../types/user';
 
 interface AuthContextType {
   user: User | null;
@@ -18,7 +18,14 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function loadStoredUser(): User | null {
   const saved = localStorage.getItem('safety_user');
-  return saved ? JSON.parse(saved) : null;
+  if (!saved) return null;
+  try {
+    const parsed = JSON.parse(saved) as User;
+    parsed.role = toAppRole(parsed.role) ?? parsed.role;
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
 function persist(user: User | null) {
@@ -36,21 +43,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.setItem('accessToken', tokens.accessToken);
     localStorage.setItem('refreshToken', tokens.refreshToken);
     queryClient.clear();
-    const appRole = toAppRole(tokens.user.role);
+    let appRole = toAppRole(tokens.user.role);
     let name = extras.name ?? user?.name ?? tokens.user.email.split('@')[0];
     let organizationName = extras.organizationName ?? null;
+    let organizationId = tokens.user.organizationId ?? tokens.user.collegeId ?? extras.organizationId ?? null;
     try {
       const me = await getMe();
+      // Org operators are distinguished by orgStaff.orgRole (OWNER/ADMIN/STAFF), not only users.role.
+      appRole = resolveOrgAppRole(me.role, me.orgStaff?.orgRole) ?? appRole;
       if (me.orgStaff) {
         name = me.orgStaff.name;
         organizationName = me.orgStaff.organization?.name ?? organizationName;
+        organizationId = me.orgStaff.organization?.id ?? organizationId;
       } else if (appRole === 'support') {
         name = extras.name ?? user?.name ?? 'Support';
       }
     } catch {
       // keep derived name
     }
-    const organizationId = tokens.user.organizationId ?? tokens.user.collegeId ?? extras.organizationId ?? null;
     const next: User = {
       id: tokens.user.id,
       email: tokens.user.email,
@@ -91,6 +101,49 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return next;
     });
   };
+
+  // Re-read /auth/me on load so a stored "staff" session is corrected to owner/admin.
+  useEffect(() => {
+    if (!localStorage.getItem('accessToken')) return;
+    let cancelled = false;
+    getMe()
+      .then((me) => {
+        if (cancelled) return;
+        const appRole = resolveOrgAppRole(me.role, me.orgStaff?.orgRole);
+        if (!appRole) return;
+        setUser((prev) => {
+          if (!prev) return prev;
+          const name = me.orgStaff?.name ?? prev.name;
+          const organizationName = me.orgStaff?.organization?.name ?? prev.organizationName;
+          const organizationId = me.orgStaff?.organization?.id ?? prev.organizationId;
+          if (
+            prev.role === appRole &&
+            prev.name === name &&
+            prev.organizationName === organizationName &&
+            prev.organizationId === organizationId
+          ) {
+            return prev;
+          }
+          const next: User = {
+            ...prev,
+            role: appRole,
+            name,
+            organizationName,
+            organizationId,
+            collegeId: organizationId,
+            collegeName: organizationName,
+          };
+          persist(next);
+          return next;
+        });
+      })
+      .catch(() => {
+        // Keep the stored session; a 401 interceptor already sends the user to login.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, role: user?.role ?? null, isAuthenticated, login, logout, applySession, updateLocalUser }}>

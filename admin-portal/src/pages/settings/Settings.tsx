@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { canAddOrgAdmins, canManageOrgTeam } from "../../types/user";
 import { changePassword, updateMyProfile } from "../../services/authService";
 import {
   getJoinCode,
@@ -17,8 +18,8 @@ type Tab = "account" | "organization" | "features" | "access";
 export default function Settings() {
   const { user, role, updateLocalUser } = useAuth();
   const [tab, setTab] = useState<Tab>("account");
-  const canOrg = role === "admin" || role === "owner";
-  const canFeatures = role === "owner";
+  const canOrg = canManageOrgTeam(role);
+  const canFeatures = canAddOrgAdmins(role);
 
   const tabs: { id: Tab; label: string; show: boolean }[] = [
     { id: "account", label: "My account", show: true },

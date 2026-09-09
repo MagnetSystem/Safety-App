@@ -18,6 +18,7 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { MailService } from './mail.service';
+import { effectiveOrgUserRole } from '../common/org-roles';
 import type { JwtPayload } from './types/jwt-payload.interface';
 import { generateJoinCode, slugCodeFromName } from '../common/codes';
 import { OrganizationTypesService } from '../organization-types/organization-types.service';
@@ -170,7 +171,8 @@ export class AuthService {
         }
       }
 
-      return this.issueTokens(user.id, user.email, user.role, organizationId);
+      const effectiveRole = effectiveOrgUserRole(user.role, user.orgStaff?.orgRole);
+      return this.issueTokens(user.id, user.email, effectiveRole, organizationId);
     });
   }
 
@@ -184,11 +186,14 @@ export class AuthService {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
-    const user = await this.prisma.bypassRls(() => this.prisma.user.findUnique({ where: { id: payload.sub } }));
+    const user = await this.prisma.bypassRls(() =>
+      this.prisma.user.findUnique({ where: { id: payload.sub }, include: { orgStaff: true } }),
+    );
     if (!user || !user.isActive) throw new UnauthorizedException('Account no longer active');
 
     const organizationId = payload.organizationId ?? payload.collegeId ?? null;
-    return this.issueTokens(user.id, user.email, user.role, organizationId);
+    const effectiveRole = effectiveOrgUserRole(user.role, user.orgStaff?.orgRole);
+    return this.issueTokens(user.id, user.email, effectiveRole, organizationId);
   }
 
   async forgotPassword(dto: ForgotPasswordDto) {

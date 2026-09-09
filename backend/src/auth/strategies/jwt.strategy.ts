@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaService } from '../../prisma/prisma.service';
+import { effectiveOrgUserRole } from '../../common/org-roles';
 import type { AuthenticatedUser, JwtPayload } from '../types/jwt-payload.interface';
 
 const SESSION_TTL_MS = 30_000;
@@ -42,7 +43,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
           email: true,
           role: true,
           isActive: true,
-          orgStaff: { select: { organization: { select: { id: true, status: true } } } },
+          orgStaff: { select: { orgRole: true, organization: { select: { id: true, status: true } } } },
           member: { select: { organization: { select: { id: true, status: true } } } },
         },
       }),
@@ -73,7 +74,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     const user: AuthenticatedUser = {
       id: row.id,
       email: row.email,
-      role: row.role,
+      role: effectiveOrgUserRole(row.role, row.orgStaff?.orgRole),
       organizationId,
       collegeId: organizationId,
       memberId: payload.memberId ?? null,
