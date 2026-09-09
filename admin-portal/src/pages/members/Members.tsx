@@ -1,37 +1,46 @@
 import { useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Search, Loader2, X, Phone, Mail, Droplets, BookOpen, MapPin, Calendar } from "lucide-react";
+import { Search, X, Phone, Mail, Droplets, BookOpen, MapPin, Calendar } from "lucide-react";
 import { getMembers, resetMemberPassword } from "../../services/membersService";
 import type { Student } from "../../types/organization";
 import { useAuth } from "../../context/AuthContext";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { queryKeys } from "../../lib/queryKeys";
+import Pagination from "../../components/Pagination";
+import TableSkeleton from "../../components/TableSkeleton";
+import PasswordDialog from "../../components/PasswordDialog";
+
+const PAGE_SIZE = 20;
 
 export default function Members() {
   const { role } = useAuth();
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
   const debouncedQuery = useDebouncedValue(query, query ? 300 : 0);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [resetTarget, setResetTarget] = useState<Student | null>(null);
+  const [resetError, setResetError] = useState("");
+  const [resetBusy, setResetBusy] = useState(false);
   const { data, isLoading: loading, isError } = useQuery({
-    queryKey: queryKeys.members.list(debouncedQuery || undefined),
-    queryFn: () => getMembers({ search: debouncedQuery || undefined, pageSize: 50 }),
+    queryKey: queryKeys.members.list({ search: debouncedQuery || undefined, page, pageSize: PAGE_SIZE }),
+    queryFn: () => getMembers({ search: debouncedQuery || undefined, page, pageSize: PAGE_SIZE }),
     placeholderData: keepPreviousData,
   });
   const students = data?.items ?? [];
+  const total = data?.total ?? 0;
   const error = isError ? "Could not load members." : "";
 
-  const handleResetPassword = async (s: Student) => {
-    const newPassword = window.prompt(`New password for ${s.user?.email || s.name} (min 8 characters):`);
-    if (!newPassword) return;
-    if (newPassword.length < 8) {
-      window.alert("Password must be at least 8 characters.");
-      return;
-    }
+  const handleResetPassword = async (newPassword: string) => {
+    if (!resetTarget) return;
+    setResetBusy(true);
+    setResetError("");
     try {
-      await resetMemberPassword(s.id, newPassword);
-      window.alert("Password reset successfully.");
+      await resetMemberPassword(resetTarget.id, newPassword);
+      setResetTarget(null);
     } catch {
-      window.alert("Could not reset password.");
+      setResetError("Could not reset password.");
+    } finally {
+      setResetBusy(false);
     }
   };
 
@@ -46,8 +55,11 @@ export default function Members() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by name, roll, department..."
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setPage(1);
+            }}
+            placeholder="Search by name, ID, department..."
             className="w-full pl-9 pr-4 py-2 rounded-lg bg-card border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
         </div>
@@ -61,18 +73,16 @@ export default function Members() {
 
       <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center py-16 text-muted-foreground">
-            <Loader2 className="animate-spin mr-2" size={18} /> Loading students…
-          </div>
+          <TableSkeleton />
         ) : students.length === 0 ? (
-          <div className="py-16 text-center text-sm text-muted-foreground">No students found.</div>
+          <div className="py-16 text-center text-sm text-muted-foreground">No members found.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-muted-foreground">
                   <th className="text-left font-medium px-4 py-3">Name</th>
-                  <th className="text-left font-medium px-4 py-3">Roll No</th>
+                  <th className="text-left font-medium px-4 py-3">Member ID</th>
                   <th className="text-left font-medium px-4 py-3 hidden md:table-cell">Department</th>
                   <th className="text-left font-medium px-4 py-3 hidden sm:table-cell">Year</th>
                   <th className="text-left font-medium px-4 py-3 hidden lg:table-cell">Hosteler</th>
@@ -100,7 +110,8 @@ export default function Members() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleResetPassword(s);
+                            setResetError("");
+                            setResetTarget(s);
                           }}
                           className="text-xs font-medium px-2.5 py-1 rounded-lg border border-border hover:bg-muted"
                         >
@@ -135,7 +146,7 @@ export default function Members() {
                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${selectedStudent.user?.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
                     {selectedStudent.user?.isActive ? 'Active Account' : 'Suspended Account'}
                   </span>
-                  <span className="text-xs text-slate-500 font-medium truncate">{selectedStudent.studentNumber || 'No Roll No'}</span>
+                  <span className="text-xs text-slate-500 font-medium truncate">{selectedStudent.memberNumber || selectedStudent.studentNumber || 'No ID'}</span>
                 </div>
               </div>
             </div>
@@ -204,6 +215,18 @@ export default function Members() {
           </div>
         </div>
       )}
+
+      <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
+
+      <PasswordDialog
+        open={!!resetTarget}
+        title="Reset member password"
+        description={resetTarget ? `Set a temporary password for ${resetTarget.user?.email || resetTarget.name}.` : undefined}
+        submitting={resetBusy}
+        error={resetError}
+        onClose={() => setResetTarget(null)}
+        onSubmit={handleResetPassword}
+      />
     </div>
   );
 }

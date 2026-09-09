@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Plus, Search, Shield, UserCog, X } from "lucide-react";
 import {
   activateStaff,
@@ -15,6 +15,11 @@ import type { OrgRole, StaffMember } from "../../types/organization";
 import { canAddOrgAdmins, canManageOrgTeam } from "../../types/user";
 import { queryKeys } from "../../lib/queryKeys";
 import type { Paginated } from "../../types/report";
+import Pagination from "../../components/Pagination";
+import TableSkeleton from "../../components/TableSkeleton";
+import PasswordDialog from "../../components/PasswordDialog";
+
+const PAGE_SIZE = 20;
 
 const EMPTY_FORM = {
   name: "",
@@ -37,18 +42,24 @@ export default function Team() {
   const canManage = canManageOrgTeam(role);
 
   const queryClient = useQueryClient();
-  const staffKey = queryKeys.staff.list({ pageSize: 100 });
+  const [page, setPage] = useState(1);
+  const staffKey = queryKeys.staff.list({ page, pageSize: PAGE_SIZE });
   const [search, setSearch] = useState("");
   const [actionError, setActionError] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [formError, setFormError] = useState("");
+  const [resetTarget, setResetTarget] = useState<StaffMember | null>(null);
+  const [resetError, setResetError] = useState("");
+  const [resetBusy, setResetBusy] = useState(false);
 
   const { data, isLoading: loading, isError } = useQuery({
     queryKey: staffKey,
-    queryFn: () => getStaff({ pageSize: 100 }),
+    queryFn: () => getStaff({ page, pageSize: PAGE_SIZE }),
+    placeholderData: keepPreviousData,
   });
   const items = data?.items ?? [];
+  const total = data?.total ?? 0;
   const error = actionError || (isError ? "Could not load team members." : "");
 
   const { data: departments = [] } = useQuery({
@@ -110,18 +121,17 @@ export default function Team() {
     }
   };
 
-  const handleResetPassword = async (member: StaffMember) => {
-    const newPassword = window.prompt(`New password for ${member.user.email} (min 8 characters):`);
-    if (!newPassword) return;
-    if (newPassword.length < 8) {
-      window.alert("Password must be at least 8 characters.");
-      return;
-    }
+  const handleResetPassword = async (newPassword: string) => {
+    if (!resetTarget) return;
+    setResetBusy(true);
+    setResetError("");
     try {
-      await resetStaffPassword(member.id, newPassword);
-      window.alert("Password reset successfully.");
+      await resetStaffPassword(resetTarget.id, newPassword);
+      setResetTarget(null);
     } catch {
-      window.alert("Could not reset password.");
+      setResetError("Could not reset password.");
+    } finally {
+      setResetBusy(false);
     }
   };
 
@@ -183,9 +193,7 @@ export default function Team() {
 
       <div className="surface-card overflow-hidden">
         {loading ? (
-          <div className="py-16 flex justify-center text-muted-foreground">
-            <Loader2 className="animate-spin" />
-          </div>
+          <TableSkeleton />
         ) : filtered.length === 0 ? (
           <div className="py-16 text-center text-sm text-muted-foreground">
             No team members yet. Add an admin or staff account to get started.
@@ -238,7 +246,10 @@ export default function Team() {
                       {m.orgRole !== "OWNER" && (
                         <>
                           <button
-                            onClick={() => handleResetPassword(m)}
+                            onClick={() => {
+                              setResetError("");
+                              setResetTarget(m);
+                            }}
                             className="text-xs font-medium px-2.5 py-1 rounded-lg border border-border hover:bg-muted"
                           >
                             Reset password
@@ -263,6 +274,18 @@ export default function Team() {
           </div>
         )}
       </div>
+
+      <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
+
+      <PasswordDialog
+        open={!!resetTarget}
+        title="Reset staff password"
+        description={resetTarget ? `Set a temporary password for ${resetTarget.user.email}.` : undefined}
+        submitting={resetBusy}
+        error={resetError}
+        onClose={() => setResetTarget(null)}
+        onSubmit={handleResetPassword}
+      />
 
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">

@@ -114,7 +114,11 @@ export default function SearchPage() {
               ) : (
                 <div className="space-y-2">
                   {results.colleges.map((c) => (
-                    <div key={c.id} className="flex justify-between items-center p-2 rounded-lg hover:bg-muted/50">
+                    <div
+                      key={c.id}
+                      onClick={() => navigate("/super-admin/organizations")}
+                      className="flex justify-between items-center p-2 rounded-lg hover:bg-muted/50 cursor-pointer"
+                    >
                       <div>
                         <p className="font-medium">{c.name}</p>
                         <p className="text-sm text-muted-foreground">{c.code}</p>

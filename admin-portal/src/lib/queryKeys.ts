@@ -4,7 +4,8 @@ export const queryKeys = {
 
   reports: {
     all: ["reports"] as const,
-    list: (status?: string) => ["reports", "list", status ?? "all"] as const,
+    list: (params: { status?: string; page?: number; pageSize?: number } = {}) =>
+      ["reports", "list", params.status ?? "all", params.page ?? 1, params.pageSize ?? 20] as const,
     detail: (id: string) => ["reports", "detail", id] as const,
     evidence: (id: string) => ["reports", "evidence", id] as const,
     messages: (id: string) => ["reports", "messages", id] as const,
@@ -12,12 +13,13 @@ export const queryKeys = {
 
   members: {
     all: ["members"] as const,
-    list: (search?: string) => ["members", "list", search ?? ""] as const,
+    list: (params: { search?: string; page?: number; pageSize?: number } = {}) =>
+      ["members", "list", params.search ?? "", params.page ?? 1, params.pageSize ?? 20] as const,
   },
 
   notifications: {
     all: ["notifications"] as const,
-    list: (pageSize = 50) => ["notifications", "list", pageSize] as const,
+    list: (pageSize = 20, page = 1) => ["notifications", "list", pageSize, page] as const,
     unread: ["notifications", "unread"] as const,
   },
 
@@ -27,7 +29,8 @@ export const queryKeys = {
 
   staff: {
     all: ["staff"] as const,
-    list: (params: { pageSize?: number } = {}) => ["staff", "list", params] as const,
+    list: (params: { pageSize?: number; page?: number; organizationId?: string } = {}) =>
+      ["staff", "list", params] as const,
   },
 
   organizations: {

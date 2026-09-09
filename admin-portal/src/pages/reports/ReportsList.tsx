@@ -1,10 +1,16 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Loader2, Eye, Download } from "lucide-react";
-import { getReports } from "../../services/incidentsService";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Eye, Download } from "lucide-react";
+import { getReportById, getReports } from "../../services/incidentsService";
 import { formatEnum, type ComplaintStatus, type Report } from "../../types/report";
 import { queryKeys } from "../../lib/queryKeys";
+import { useAuth } from "../../context/AuthContext";
+import { reportPath } from "../../lib/paths";
+import Pagination from "../../components/Pagination";
+import TableSkeleton from "../../components/TableSkeleton";
+
+const PAGE_SIZE = 20;
 
 function toCsv(rows: Report[]): string {
   const header = ["Code", "Type", "Category", "Reporter", "Status", "Priority", "Created", "Location"];
@@ -14,7 +20,7 @@ function toCsv(rows: Report[]): string {
       r.code,
       formatEnum(r.type),
       formatEnum(r.category),
-      r.reporterLabel ?? "Anonymous Student",
+      r.reporterLabel ?? "Anonymous",
       formatEnum(r.status),
       formatEnum(r.priority),
       new Date(r.createdAt).toISOString(),
@@ -47,14 +53,26 @@ const STATUS_TABS: { label: string; value: ComplaintStatus | "All" }[] = [
 ];
 
 export default function ReportsList() {
+  const { role } = useAuth();
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState<ComplaintStatus | "All">("All");
-  const { data, isLoading: loading, isError } = useQuery({
-    queryKey: queryKeys.reports.list(filter === "All" ? undefined : filter),
-    queryFn: () => getReports({ status: filter === "All" ? undefined : filter, pageSize: 50 }),
+  const [page, setPage] = useState(1);
+  const status = filter === "All" ? undefined : filter;
+  const { data, isLoading: loading, isError, isFetching } = useQuery({
+    queryKey: queryKeys.reports.list({ status, page, pageSize: PAGE_SIZE }),
+    queryFn: () => getReports({ status, page, pageSize: PAGE_SIZE }),
     placeholderData: keepPreviousData,
   });
   const reports = data?.items ?? [];
+  const total = data?.total ?? 0;
   const error = isError ? "Could not load reports." : "";
+
+  const prefetch = (id: string) => {
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.reports.detail(id),
+      queryFn: () => getReportById(id),
+    });
+  };
 
   return (
     <div className="p-4 sm:p-6 space-y-5 max-w-[1400px] mx-auto">
@@ -68,16 +86,18 @@ export default function ReportsList() {
           disabled={reports.length === 0}
           className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border border-border text-sm hover:bg-muted transition disabled:opacity-50"
         >
-          <Download size={15} /> Export CSV
+          <Download size={15} /> Export this page
         </button>
       </div>
 
-      {/* Status tabs */}
       <div className="flex flex-wrap gap-2">
         {STATUS_TABS.map((s) => (
           <button
             key={s.value}
-            onClick={() => setFilter(s.value)}
+            onClick={() => {
+              setFilter(s.value);
+              setPage(1);
+            }}
             className={`px-3 py-1.5 rounded-full text-sm font-medium transition ${
               filter === s.value
                 ? "bg-primary text-primary-foreground"
@@ -95,12 +115,9 @@ export default function ReportsList() {
         </div>
       )}
 
-      {/* Table */}
-      <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl overflow-hidden">
+      <div className={`rounded-xl border border-border bg-card/60 backdrop-blur-xl overflow-hidden ${isFetching ? "opacity-80" : ""}`}>
         {loading ? (
-          <div className="flex items-center justify-center py-16 text-muted-foreground">
-            <Loader2 className="animate-spin mr-2" size={18} /> Loading reports…
-          </div>
+          <TableSkeleton />
         ) : reports.length === 0 ? (
           <div className="py-16 text-center text-sm text-muted-foreground">No reports found.</div>
         ) : (
@@ -111,7 +128,7 @@ export default function ReportsList() {
                   <th className="text-left font-medium px-4 py-3">Code</th>
                   <th className="text-left font-medium px-4 py-3">Type</th>
                   <th className="text-left font-medium px-4 py-3 hidden md:table-cell">Category</th>
-                  <th className="text-left font-medium px-4 py-3">Student</th>
+                  <th className="text-left font-medium px-4 py-3">Reporter</th>
                   <th className="text-left font-medium px-4 py-3">Status</th>
                   <th className="text-left font-medium px-4 py-3 hidden sm:table-cell">Date</th>
                   <th className="text-left font-medium px-4 py-3">Priority</th>
@@ -124,7 +141,7 @@ export default function ReportsList() {
                     <td className="px-4 py-3 font-medium">{r.code}</td>
                     <td className="px-4 py-3">{formatEnum(r.type)}</td>
                     <td className="px-4 py-3 hidden md:table-cell">{formatEnum(r.category)}</td>
-                    <td className="px-4 py-3">{r.reporterLabel ?? "Anonymous Student"}</td>
+                    <td className="px-4 py-3">{r.reporterLabel ?? "Anonymous"}</td>
                     <td className="px-4 py-3"><StatusBadge status={r.status} /></td>
                     <td className="px-4 py-3 hidden sm:table-cell text-muted-foreground">
                       {new Date(r.createdAt).toLocaleDateString()}
@@ -132,7 +149,9 @@ export default function ReportsList() {
                     <td className="px-4 py-3"><PriorityBadge priority={r.priority} /></td>
                     <td className="px-4 py-3 text-right">
                       <Link
-                        to={`/reports/${r.id}`}
+                        to={reportPath(role, r.id)}
+                        onMouseEnter={() => prefetch(r.id)}
+                        onFocus={() => prefetch(r.id)}
                         className="inline-flex items-center gap-1 text-primary hover:underline"
                       >
                         <Eye size={15} /> View
@@ -145,6 +164,8 @@ export default function ReportsList() {
           </div>
         )}
       </div>
+
+      <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
     </div>
   );
 }

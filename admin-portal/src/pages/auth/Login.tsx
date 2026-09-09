@@ -11,6 +11,8 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState({ email: "", password: "" });
+  const [remember, setRemember] = useState(true);
+  const showDemo = import.meta.env.DEV || import.meta.env.VITE_SHOW_DEMO_LOGIN === "true";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,7 +20,7 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const actualRole = await login(form.email, form.password);
+      const actualRole = await login(form.email, form.password, remember);
 
       if (actualRole === "support") {
         navigate("/super-admin");
@@ -153,10 +155,12 @@ export default function Login() {
           <input
             type="checkbox"
             id="remember"
+            checked={remember}
+            onChange={(e) => setRemember(e.target.checked)}
             className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30 accent-primary"
           />
           <label htmlFor="remember" className="text-sm text-muted-foreground">
-            Remember me for 30 days
+            Remember me on this device
           </label>
         </div>
 
@@ -183,13 +187,14 @@ export default function Login() {
         </button>
       </form>
 
-      {/* Seeded credentials hint */}
-      <div className="mt-5 p-3 rounded-lg bg-muted/50 border border-border">
-        <p className="text-xs text-muted-foreground text-center">
-          Demo login:{" "}
-          {role === "org" ? "admin@gec-demo.edu" : "superadmin@campussafety.dev"} / ChangeMe123!
-        </p>
-      </div>
+      {showDemo && (
+        <div className="mt-5 p-3 rounded-lg bg-muted/50 border border-border">
+          <p className="text-xs text-muted-foreground text-center">
+            Demo login:{" "}
+            {role === "org" ? "admin@gec-demo.edu" : "superadmin@campussafety.dev"} / ChangeMe123!
+          </p>
+        </div>
+      )}
 
       {role === "org" && (
         <p className="text-center text-xs text-muted-foreground mt-3">

@@ -6,13 +6,15 @@ import {
   MapPin, Clock, Loader2, FileImage, FileText, ExternalLink
 } from "lucide-react";
 import {
-  getReportById, updateReportStatus, getEvidence, getMessages, postMessage,
+  getReportById, updateReportStatus, getEvidence, getMessages, postMessage, assignCommittee,
   type ComplaintMessage,
 } from "../../services/incidentsService";
+import { getStaff } from "../../services/staffService";
 import { formatEnum, type ComplaintStatus } from "../../types/report";
 import { useAuth } from "../../context/AuthContext";
+import { canManageOrgTeam } from "../../types/user";
 import { queryKeys } from "../../lib/queryKeys";
-import jsPDF from "jspdf";
+import { reportsListPath } from "../../lib/paths";
 
 const STATUS_OPTIONS: ComplaintStatus[] = [
   "SUBMITTED",
@@ -28,7 +30,9 @@ export default function ReportDetail() {
   const { role } = useAuth();
   const queryClient = useQueryClient();
   const canManage = role === "admin" || role === "owner" || role === "staff" || role === "support";
+  const canAssign = canManageOrgTeam(role) || role === "support";
   const [actionError, setActionError] = useState("");
+  const [assigneeId, setAssigneeId] = useState("");
   
   // Status Change State
   const [statusValue, setStatusValue] = useState<ComplaintStatus>("SUBMITTED");
@@ -58,12 +62,22 @@ export default function ReportDetail() {
   const evidence = evidenceQuery.data ?? [];
   const messages = messagesQuery.data ?? [];
   const loading = reportQuery.isLoading || evidenceQuery.isLoading || messagesQuery.isLoading;
+
+  const staffQuery = useQuery({
+    queryKey: queryKeys.staff.list({ pageSize: 100, organizationId: report?.collegeId }),
+    queryFn: () => getStaff({ pageSize: 100, organizationId: report?.collegeId }),
+    enabled: canAssign && !!report,
+  });
+  const staff = staffQuery.data?.items ?? [];
   const error = reportQuery.isError || evidenceQuery.isError
     ? "Could not load this report."
     : actionError;
 
   useEffect(() => {
-    if (report) setStatusValue(report.status);
+    if (report) {
+      setStatusValue(report.status);
+      setAssigneeId(report.assignedTo?.id ?? report.assignedCommitteeUserIds?.[0] ?? "");
+    }
   }, [report]);
 
   const sendMutation = useMutation({
@@ -127,8 +141,19 @@ export default function ReportDetail() {
     }
   };
 
-  const downloadPDF = () => {
+  const assignMutation = useMutation({
+    mutationFn: (userId: string) => assignCommittee(id!, userId),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(queryKeys.reports.detail(id!), updated);
+      queryClient.invalidateQueries({ queryKey: queryKeys.reports.all });
+      setAssigneeId(updated.assignedTo?.id ?? updated.assignedCommitteeUserIds?.[0] ?? assigneeId);
+    },
+    onError: () => setActionError("Could not assign this case."),
+  });
+
+  const downloadPDF = async () => {
     if (!report) return;
+    const { default: jsPDF } = await import("jspdf");
     const doc = new jsPDF();
     
     doc.setFontSize(22);
@@ -140,7 +165,7 @@ export default function ReportDetail() {
     doc.text(`Category: ${formatEnum(report.category)}`, 20, 46);
     
     if (report.student) {
-      doc.text(`Reported by: ${report.student.name} (${report.student.studentNumber || 'No Roll No'})`, 20, 54);
+      doc.text(`Reported by: ${report.student.name} (${report.student.studentNumber || 'No ID'})`, 20, 54);
       doc.text(`Contact: ${report.student.mobile || 'N/A'}`, 20, 62);
     } else {
       doc.text(`Reported by: Anonymous`, 20, 54);
@@ -189,7 +214,7 @@ export default function ReportDetail() {
       <div className="p-4 sm:p-6 max-w-[1100px] mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link to="/reports" className="p-2 rounded-lg hover:bg-muted transition">
+        <Link to={reportsListPath(role)} className="p-2 rounded-lg hover:bg-muted transition">
           <ArrowLeft size={20} />
         </Link>
         <div>
@@ -224,7 +249,7 @@ export default function ReportDetail() {
 
             <div>
               <h3 className="font-medium mb-1">Reported by</h3>
-              <p className="text-muted-foreground">{report.reporterLabel ?? "Anonymous Student"}</p>
+              <p className="text-muted-foreground">{report.reporterLabel ?? "Anonymous"}</p>
             </div>
 
             <div>
@@ -424,7 +449,7 @@ export default function ReportDetail() {
               </>
             ) : (
               <p className="text-sm text-muted-foreground">
-                Read-only view. Status changes are managed by the college's own admin.
+                Read-only view. Status changes are managed by the organization admin.
               </p>
             )}
 
@@ -440,13 +465,44 @@ export default function ReportDetail() {
             )}
           </div>
 
-          <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl p-5">
-            <h3 className="font-medium mb-3">Committee</h3>
-            <p className="text-sm text-muted-foreground">
-              {report.assignedCommitteeUserIds?.length
-                ? `${report.assignedCommitteeUserIds.length} member(s) assigned`
-                : "Committee assignment is coming in a future release."}
-            </p>
+          <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl p-5 space-y-3">
+            <h3 className="font-medium">Assignee</h3>
+            {canAssign ? (
+              <>
+                <select
+                  value={assigneeId}
+                  disabled={assignMutation.isPending}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setAssigneeId(next);
+                    if (next) assignMutation.mutate(next);
+                  }}
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-60"
+                >
+                  <option value="">Unassigned</option>
+                  {staff.filter((m) => m.user.isActive).map((m) => (
+                    <option key={m.user.id} value={m.user.id}>
+                      {m.name} · {m.orgRole === "OWNER" ? "Owner" : m.orgRole === "ADMIN" ? "Admin" : "Staff"}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  {assignMutation.isPending
+                    ? "Saving…"
+                    : assigneeId
+                      ? "This person will see the case in their queue."
+                      : "Pick a staff member to handle this case."}
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {report.assignedTo?.email
+                  ? `Assigned to ${report.assignedTo.email}`
+                  : report.assignedCommitteeUserIds?.length
+                    ? "Assigned"
+                    : "Not assigned"}
+              </p>
+            )}
           </div>
         </div>
       </div>

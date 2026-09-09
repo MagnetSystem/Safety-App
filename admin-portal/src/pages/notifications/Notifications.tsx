@@ -1,7 +1,10 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, AlertTriangle, FileText, Upload, Loader2, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { reportPath } from "../../lib/paths";
+import Pagination from "../../components/Pagination";
 import {
   getNotifications,
   markNotificationRead,
@@ -29,16 +32,21 @@ function timeAgo(iso: string) {
   return `${days} days ago`;
 }
 
+const PAGE_SIZE = 20;
+
 export default function Notifications() {
   const { role } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const listKey = queryKeys.notifications.list(50);
+  const [page, setPage] = useState(1);
+  const listKey = queryKeys.notifications.list(PAGE_SIZE, page);
   const { data, isLoading: loading } = useQuery({
     queryKey: listKey,
-    queryFn: () => getNotifications({ pageSize: 50 }),
+    queryFn: () => getNotifications({ page, pageSize: PAGE_SIZE }),
+    placeholderData: keepPreviousData,
   });
   const notifications = data?.items ?? [];
+  const total = data?.total ?? 0;
 
   const patchList = (updater: (items: AppNotification[]) => AppNotification[]) => {
     queryClient.setQueryData<Paginated<AppNotification>>(listKey, (old) =>
@@ -47,9 +55,9 @@ export default function Notifications() {
   };
 
   const handleClick = async (n: AppNotification) => {
-    if (n.data?.complaintId) {
-      const basePath = role === 'support' ? '/super-admin/reports' : '/reports';
-      navigate(`${basePath}/${n.data.complaintId}`);
+    const caseId = n.data?.complaintId ?? n.data?.incidentId;
+    if (typeof caseId === "string") {
+      navigate(reportPath(role, caseId));
     }
     
     if (n.isRead) return;
@@ -117,7 +125,7 @@ export default function Notifications() {
                   <p className="text-sm text-muted-foreground mt-0.5 leading-relaxed">{n.body}</p>
                   <p className="text-[11px] font-medium text-muted-foreground/70 mt-1.5 uppercase tracking-wider">{timeAgo(n.createdAt)}</p>
                 </div>
-                {!!n.data?.complaintId && (
+                {!!(n.data?.complaintId ?? n.data?.incidentId) && (
                   <div className="flex items-center pl-1 shrink-0 text-muted-foreground/40 group-hover:text-primary/70 group-hover:translate-x-0.5 transition-all">
                     <ChevronRight size={18} />
                   </div>
@@ -127,6 +135,8 @@ export default function Notifications() {
           })}
         </div>
       )}
+
+      <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
     </div>
   );
 }

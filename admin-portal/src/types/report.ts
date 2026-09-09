@@ -59,6 +59,7 @@ export interface Report {
   isAnonymous: boolean;
   reporterLabel: string | null;
   assignedCommitteeUserIds: string[];
+  assignedTo?: { id: string; email: string; role?: string } | null;
   collegeId: string;
   college?: { id: string; name: string; code: string };
   student?: { id: string; name: string; studentNumber: string | null; mobile?: string | null } | null;

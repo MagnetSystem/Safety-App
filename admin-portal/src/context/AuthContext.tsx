@@ -2,22 +2,23 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { loginUser, getMe } from '../services/authService';
+import { clearAuth, inferRemember, readAuth, writeAuth, writeUser } from '../lib/authStorage';
 import { resolveOrgAppRole, toAppRole, type Role, type User } from '../types/user';
 
 interface AuthContextType {
   user: User | null;
   role: Role;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<Role>;
+  login: (email: string, password: string, remember?: boolean) => Promise<Role>;
   logout: () => void;
-  applySession: (tokens: { accessToken: string; refreshToken: string; user: { id: string; email: string; role: string; organizationId?: string | null; collegeId?: string | null } }, extras?: Partial<User>) => Promise<void>;
+  applySession: (tokens: { accessToken: string; refreshToken: string; user: { id: string; email: string; role: string; organizationId?: string | null; collegeId?: string | null } }, extras?: Partial<User>, remember?: boolean) => Promise<void>;
   updateLocalUser: (patch: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function loadStoredUser(): User | null {
-  const saved = localStorage.getItem('safety_user');
+  const saved = readAuth('safety_user');
   if (!saved) return null;
   try {
     const parsed = JSON.parse(saved) as User;
@@ -29,8 +30,8 @@ function loadStoredUser(): User | null {
 }
 
 function persist(user: User | null) {
-  if (user) localStorage.setItem('safety_user', JSON.stringify(user));
-  else localStorage.removeItem('safety_user');
+  if (user) writeUser(JSON.stringify(user));
+  else clearAuth();
 }
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -39,9 +40,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const isAuthenticated = !!user && !!user.role;
 
-  const applySession: AuthContextType['applySession'] = async (tokens, extras = {}) => {
-    localStorage.setItem('accessToken', tokens.accessToken);
-    localStorage.setItem('refreshToken', tokens.refreshToken);
+  const applySession: AuthContextType['applySession'] = async (tokens, extras = {}, remember = inferRemember()) => {
+    writeAuth(
+      { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken },
+      remember,
+    );
     queryClient.clear();
     let appRole = toAppRole(tokens.user.role);
     let name = extras.name ?? user?.name ?? tokens.user.email.split('@')[0];
@@ -49,7 +52,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     let organizationId = tokens.user.organizationId ?? tokens.user.collegeId ?? extras.organizationId ?? null;
     try {
       const me = await getMe();
-      // Org operators are distinguished by orgStaff.orgRole (OWNER/ADMIN/STAFF), not only users.role.
       appRole = resolveOrgAppRole(me.role, me.orgStaff?.orgRole) ?? appRole;
       if (me.orgStaff) {
         name = me.orgStaff.name;
@@ -78,9 +80,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     persist(next);
   };
 
-  const login = async (email: string, password: string): Promise<Role> => {
+  const login = async (email: string, password: string, remember = true): Promise<Role> => {
     const result = await loginUser(email, password);
-    await applySession(result);
+    await applySession(result, {}, remember);
     const saved = loadStoredUser();
     return saved?.role ?? null;
   };
@@ -89,8 +91,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     queryClient.clear();
     setUser(null);
     persist(null);
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
   };
 
   const updateLocalUser = (patch: Partial<User>) => {
@@ -102,9 +102,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
   };
 
-  // Re-read /auth/me on load so a stored "staff" session is corrected to owner/admin.
   useEffect(() => {
-    if (!localStorage.getItem('accessToken')) return;
+    if (!readAuth('accessToken')) return;
     let cancelled = false;
     getMe()
       .then((me) => {

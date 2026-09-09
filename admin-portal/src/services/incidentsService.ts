@@ -23,8 +23,8 @@ export const updateReportStatus = async (id: string, status: ComplaintStatus, no
   return data;
 };
 
-export const assignCommittee = async (id: string, userIds: string[]) => {
-  const { data } = await api.patch<Report>(`/incidents/${id}/assign`, { userIds });
+export const assignCommittee = async (id: string, assignedToUserId: string) => {
+  const { data } = await api.patch<Report>(`/incidents/${id}/assign`, { assignedToUserId });
   return data;
 };
 

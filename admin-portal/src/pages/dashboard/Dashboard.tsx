@@ -41,7 +41,7 @@ export default function Dashboard() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search reports..."
+            placeholder="Search cases..."
             className="w-full pl-9 pr-4 py-2 rounded-lg bg-card border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
         </form>

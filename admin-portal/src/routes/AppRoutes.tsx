@@ -119,7 +119,14 @@ const AppRoutes = () => {
         <Route path="settings" element={<SupportSettings />} />
       </Route>
 
-      <Route path="/onboarding" element={<Onboarding />} />
+      <Route
+        path="/onboarding"
+        element={
+          <ProtectedRoute portal="org">
+            <Onboarding />
+          </ProtectedRoute>
+        }
+      />
 
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
