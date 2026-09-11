@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable, FlatList, RefreshControl, ActivityIn
 import { useRouter, useFocusEffect } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
 import { Screen } from '../../src/components/PhoneFrame';
-import { Glass, ScreenHeader, StatusPill } from '../../src/components/ui-kit';
+import { Glass, ScreenHeader, StatusPill, LoadingCards, EmptyState } from '../../src/components/ui-kit';
 import { getReports } from '../../src/services/incidentsService';
 import { categoryLabel, type Report } from '../../src/types';
 import { colors, radius, spacing, typography } from '../../src/constants/theme';
@@ -73,35 +73,32 @@ export default function ReportsScreen() {
         }
         ListEmptyComponent={
           loading ? (
-            <ActivityIndicator color={colors.indigoink} style={styles.loading} />
+            <LoadingCards />
           ) : (
-            <Glass style={styles.emptyCard}>
-              <Text style={styles.emptyText}>
-                {error ?? 'You have not filed any reports yet. Pull down to refresh.'}
-              </Text>
-            </Glass>
+            <EmptyState title={error ? 'Reports could not load' : 'Your reports, in one place'} message={error ?? 'When you submit a report, its updates and conversation will appear here.'} onRetry={error ? () => load(true) : undefined} />
           )
         }
         ListFooterComponent={
           loadingMore ? <ActivityIndicator color={colors.indigoink} style={styles.footerLoading} /> : null
         }
         renderItem={({ item: r }) => (
-          <Pressable onPress={() => router.push(`/reports/${r.id}`)} style={styles.cardWrap}>
+          <Pressable accessibilityRole="button" onPress={() => router.push(`/reports/${r.id}`)} style={styles.cardWrap}>
             <Glass style={styles.card}>
               <View style={styles.content}>
                 <View style={styles.info}>
                   <View style={[styles.typeBadge, { backgroundColor: r.type === 'ANONYMOUS' ? colors.lavenderTint : colors.mintTint }]}>
                     <Text style={[styles.typeText, { color: r.type === 'ANONYMOUS' ? colors.lavender : colors.mintInk }]}>
-                      {r.type === 'ANONYMOUS' ? 'Anonymous' : r.type === 'EMERGENCY' ? 'Emergency' : 'Normal'}
+                      {r.type === 'ANONYMOUS' ? 'Anonymous' : r.type === 'EMERGENCY' ? 'Emergency' : 'Named report'}
                     </Text>
                   </View>
-                  <Text style={styles.category} numberOfLines={1}>
+                  <Text style={styles.category} numberOfLines={2}>
                     {categoryLabel(r.category)}
                   </Text>
                   <Text style={styles.meta}>
                     {new Date(r.createdAt).toLocaleDateString()} · {r.code}
                   </Text>
                 </View>
+                <Text style={styles.meta}>{r.timeline?.length ? `Updated ${new Date(Math.max(...r.timeline.map(t => new Date(t.createdAt).getTime()))).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}` : 'Awaiting an update'}</Text>
                 <View style={styles.statusSection}>
                   <StatusPill status={r.status} />
                   <ChevronRight size={16} color={colors.mutedink} style={styles.chevron} />
@@ -140,8 +137,8 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   content: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: 'column',
+    alignItems: 'stretch',
     justifyContent: 'space-between',
     gap: spacing.md,
   },
@@ -156,7 +153,7 @@ const styles = StyleSheet.create({
   },
   typeText: {
     ...typography.caption,
-    fontSize: 11,
+    fontSize: 13,
     fontFamily: 'Inter_500Medium',
   },
   category: {

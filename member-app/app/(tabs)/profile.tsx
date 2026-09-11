@@ -10,11 +10,9 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
-  Animated,
-  Easing,
   Share,
 } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
@@ -101,52 +99,10 @@ const SHEET_TITLES: Record<ProfileSheet, string> = {
   privacy: 'Privacy & data',
 };
 
-const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const SCRAMBLE_LEN = 6;
-
 function InviteCodeCard({ generating, code }: { generating: boolean; code: string | null }) {
-  const [shown, setShown] = useState('••••••');
   const [copied, setCopied] = useState(false);
-  const pulse = React.useRef(new Animated.Value(1)).current;
-  const scale = React.useRef(new Animated.Value(1)).current;
-  const wasGenerating = React.useRef(false);
   const copiedTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  React.useEffect(() => {
-    if (generating) {
-      wasGenerating.current = true;
-      pulse.setValue(0.55);
-      const tick = setInterval(() => {
-        let next = '';
-        for (let i = 0; i < SCRAMBLE_LEN; i += 1) {
-          next += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
-        }
-        setShown(next);
-      }, 55);
-      const loop = Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulse, { toValue: 1, duration: 420, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-          Animated.timing(pulse, { toValue: 0.5, duration: 420, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        ]),
-      );
-      loop.start();
-      return () => {
-        clearInterval(tick);
-        loop.stop();
-      };
-    }
-
-    pulse.stopAnimation();
-    pulse.setValue(1);
-    if (code && wasGenerating.current) {
-      wasGenerating.current = false;
-      setShown(code);
-      scale.setValue(0.86);
-      Animated.spring(scale, { toValue: 1, friction: 6, tension: 140, useNativeDriver: true }).start();
-      return;
-    }
-    if (code) setShown(code);
-  }, [generating, code, pulse, scale]);
+  React.useEffect(() => () => { if (copiedTimer.current) clearTimeout(copiedTimer.current); }, []);
 
   if (!generating && !code) return null;
 
@@ -176,11 +132,11 @@ function InviteCodeCard({ generating, code }: { generating: boolean; code: strin
   };
 
   return (
-    <Animated.View style={[styles.codeCard, { opacity: pulse, transform: [{ scale }] }]}>
+    <View style={styles.codeCard}>
       <Text style={styles.codeLabel}>
         {generating ? 'Generating invite code' : 'Share this one-time code'}
       </Text>
-      <Text style={[styles.codeDigits, generating && styles.codeDigitsLive]}>{shown}</Text>
+      <Text style={[styles.codeDigits, generating && styles.codeDigitsLive]}>{generating ? 'Preparing...' : code}</Text>
       <Text style={styles.codeHint}>
         {generating ? 'This only takes a moment…' : 'Your guardian enters this in their app'}
       </Text>
@@ -196,7 +152,7 @@ function InviteCodeCard({ generating, code }: { generating: boolean; code: strin
           </Pressable>
         </View>
       ) : null}
-    </Animated.View>
+    </View>
   );
 }
 
@@ -204,12 +160,20 @@ const NOT_SET = 'Not set';
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { section } = useLocalSearchParams<{ section?: string }>();
   const { logout } = useAuth();
 
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sheet, setSheet] = useState<ProfileSheet | null>(null);
+  useFocusEffect(useCallback(() => {
+    if (section === 'guardian' || section === 'org') {
+      setSheet(section);
+      router.setParams({ section: undefined });
+    }
+  }, [section, router]));
+
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -226,7 +190,9 @@ export default function ProfileScreen() {
     emergencyContactPhone: '',
   });
 
-  const applyProfile = (p: StudentProfile) => {
+  const [guardians, setGuardians] = useState<{ id: string; status: string; guardian: { email: string } | null }[]>([]);
+
+  const applyProfile = useCallback((p: StudentProfile) => {
     setProfile(p);
     setFormData({
       mobile: p.mobile || '',
@@ -240,9 +206,9 @@ export default function ProfileScreen() {
       emergencyContactName: p.emergencyContactName || '',
       emergencyContactPhone: p.emergencyContactPhone || '',
     });
-  };
+  }, []);
 
-  const loadProfile = () => {
+  const loadProfile = useCallback(() => {
     setLoading(true);
     getMyProfile()
       .then((p) => {
@@ -252,12 +218,12 @@ export default function ProfileScreen() {
       })
       .catch(() => setError('Could not load your profile.'))
       .finally(() => setLoading(false));
-  };
+  }, [applyProfile]);
 
   useFocusEffect(
     useCallback(() => {
       loadProfile();
-    }, [])
+    }, [loadProfile])
   );
 
   const [busy, setBusy] = useState<null | 'export' | 'delete'>(null);
@@ -266,7 +232,7 @@ export default function ProfileScreen() {
   const [guardianCode, setGuardianCode] = useState<string | null>(null);
   const [inviting, setInviting] = useState(false);
   const [acceptCode, setAcceptCode] = useState('');
-  const [guardians, setGuardians] = useState<{ id: string; status: string; guardian: { email: string } | null }[]>([]);
+
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -663,18 +629,20 @@ export default function ProfileScreen() {
   return (
     <Screen padded>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.screenTitle}>Profile</Text>
+        <Text style={styles.screenTitle}>Your space</Text>
+        <Text style={{ ...typography.body, color: colors.subink, marginBottom: 16 }}>Your details, trusted people, and preferences.</Text>
 
         {error && !sheet && <Text style={styles.error}>{error}</Text>}
 
-        <View style={styles.avatarSection}>
+        <Glass style={styles.avatarSection}>
           <View style={styles.avatar}>
             <Text style={styles.avatarInitials}>{initials || '?'}</Text>
           </View>
           <Text style={styles.name}>{name}</Text>
           <Text style={styles.college}>{orgName ?? 'No organization yet'}</Text>
-        </View>
+        </Glass>
 
+        <Text style={styles.groupTitle}>Personal details</Text>
         <Glass style={styles.menuCard}>
           <MenuRow
             icon={GraduationCap}
@@ -682,7 +650,9 @@ export default function ProfileScreen() {
             value={profile?.department ?? undefined}
             onPress={() => openSheet('academic')}
           />
-          <View style={styles.menuDivider} />
+        </Glass>
+        <Text style={styles.groupTitle}>Safety setup</Text>
+        <Glass style={styles.menuCard}>
           <MenuRow
             icon={HeartPulse}
             label="Emergency medical info"
@@ -700,10 +670,12 @@ export default function ProfileScreen() {
           <MenuRow
             icon={UserPlus}
             label="Guardian"
-            value={guardians.length ? String(guardians.length) : 'None yet'}
+            value={guardians.some(g => g.status === 'ACTIVE') ? 'Connected' : guardians.some(g => g.status === 'PENDING') ? 'Invite pending' : 'Set up'}
             onPress={() => openSheet('guardian')}
           />
-          <View style={styles.menuDivider} />
+        </Glass>
+        <Text style={styles.groupTitle}>Account & privacy</Text>
+        <Glass style={styles.menuCard}>
           <MenuRow
             icon={Lock}
             label="Change password"
@@ -772,6 +744,7 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  groupTitle: { ...typography.h3, color: colors.mintInk, marginBottom: 10, marginTop: 12 },
   scrollContent: {
     paddingBottom: spacing.xxl,
   },
@@ -811,6 +784,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   avatarSection: {
+    backgroundColor: 'rgba(235,231,251,0.6)',
+    borderRadius: 30,
+    padding: 24,
     alignItems: 'center',
     marginBottom: 28,
   },
@@ -818,7 +794,7 @@ const styles = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: 48,
-    backgroundColor: 'rgba(91, 110, 232, 0.12)',
+    backgroundColor: '#DDD5F9',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.lg,
@@ -830,7 +806,7 @@ const styles = StyleSheet.create({
   },
   name: {
     ...typography.h1,
-    fontSize: 20,
+    fontSize: 24,
     color: colors.ink,
     letterSpacing: -0.5,
   },
@@ -838,7 +814,7 @@ const styles = StyleSheet.create({
     ...typography.body,
     fontSize: 14,
     color: colors.subink,
-    marginTop: 4,
+    marginTop: 6,
     textAlign: 'center',
   },
   menuCard: {
@@ -887,8 +863,9 @@ const styles = StyleSheet.create({
   },
   modalRoot: {
     flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 20,
+    justifyContent: 'flex-end',
+    paddingHorizontal: 12,
+    paddingBottom: 24,
   },
   modalBackdrop: {
     ...StyleSheet.absoluteFill,

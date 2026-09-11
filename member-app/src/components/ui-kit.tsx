@@ -1,34 +1,42 @@
 import React from 'react';
 import { View, Text, TextInput, StyleSheet, Pressable, Platform, TextInputProps, ViewStyle } from 'react-native';
 import { useRouter } from 'expo-router';
-import { BlurView } from 'expo-blur';
-import { ChevronLeft } from 'lucide-react-native';
-import { colors, radius, typography, spacing, shadows } from '../constants/theme';
+import { ChevronLeft, HeartHandshake } from 'lucide-react-native';
+import { Frost } from './GlassSurface';
+import { glassSurface, colors, radius, typography, spacing, shadows } from '../constants/theme';
 import { ComplaintStatus, statusLabel } from '../types';
 
 export function Glass({ children, style }: { children: React.ReactNode, style?: ViewStyle | ViewStyle[] }) {
-  if (Platform.OS === 'web') {
-    return (
-      <View style={[styles.glassWeb, style]}>
-        {children}
-      </View>
-    );
-  }
-  return (
-    <BlurView intensity={20} tint="light" style={[styles.glassNative, style]}>
-      {children}
-    </BlurView>
-  );
+  return <View style={[styles.glassWeb, style]}><Frost />{children}</View>;
+}
+
+export function LoadingCards() {
+  return <View accessibilityLabel="Loading content" accessibilityRole="progressbar" style={{ gap: 12 }}>
+    {[0, 1, 2].map(i => <View key={i} style={{ padding: 20, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.6)', gap: 12 }}>
+      <View style={{ width: '55%', height: 16, borderRadius: 8, backgroundColor: '#E4EEEB' }} />
+      <View style={{ width: '80%', height: 12, borderRadius: 6, backgroundColor: '#EDF3F1' }} />
+    </View>)}
+  </View>;
+}
+
+export function EmptyState({ title, message, onRetry }: { title: string; message: string; onRetry?: () => void }) {
+  return <Glass style={{ alignItems: 'center', padding: 24, gap: 12 }}>
+    <View style={{ width: 56, height: 56, borderRadius: 20, backgroundColor: colors.mintTint, alignItems: 'center', justifyContent: 'center' }}><HeartHandshake size={28} color={colors.mintInk} /></View>
+    <Text style={{ ...typography.h3, color: colors.ink, textAlign: 'center' }}>{title}</Text>
+    <Text style={{ ...typography.body, color: colors.subink, textAlign: 'center' }}>{message}</Text>
+    {onRetry && <Pressable accessibilityRole="button" onPress={onRetry} style={{ minHeight: 48, justifyContent: 'center', paddingHorizontal: 24, borderRadius: 14, backgroundColor: colors.mintTint }}><Text style={{ ...typography.label, color: colors.mintInk }}>Try again</Text></Pressable>}
+  </Glass>;
 }
 
 export function StatusPill({ status }: { status: ComplaintStatus }) {
   const isResolved = status === 'RESOLVED';
   const isClosed = status === 'CLOSED';
-  const bg = isResolved ? colors.mintTint : isClosed ? colors.neutralTint : colors.amberTint;
-  const color = isResolved ? colors.mintInk : isClosed ? colors.neutralInk : colors.amberInk;
+  const needsInfo = status === 'MORE_INFO_REQUESTED';
+  const bg = isResolved ? colors.mintTint : isClosed ? colors.neutralTint : needsInfo ? colors.amberTint : colors.lavenderTint;
+  const color = isResolved ? colors.mintInk : isClosed ? colors.neutralInk : needsInfo ? colors.amberInk : colors.lavender;
 
   return (
-    <View style={[styles.statusPill, { backgroundColor: bg }]}>
+    <View style={[styles.statusPill, { backgroundColor: bg, maxWidth: '100%' }]}>
       <Text style={[styles.statusText, { color }]}>{statusLabel(status)}</Text>
     </View>
   );
@@ -62,7 +70,7 @@ export function GlassInput({ label, style, ...props }: { label: string, style?: 
   const [isFocused, setIsFocused] = React.useState(false);
 
   return (
-    <View style={[styles.inputContainer, style]}>
+    <View style={styles.inputContainer}>
       <Text style={styles.inputLabel}>{label}</Text>
       {Platform.OS === 'web' ? (
         <TextInput
@@ -75,7 +83,8 @@ export function GlassInput({ label, style, ...props }: { label: string, style?: 
         />
       ) : (
         <View style={[styles.glassInputNative, isFocused && styles.glassInputFocused]}>
-          <BlurView intensity={20} tint="light" style={StyleSheet.absoluteFill} />
+          <Frost />
+
           <TextInput
             {...props}
             style={[styles.nativeInput, style] as any}
@@ -92,22 +101,22 @@ export function GlassInput({ label, style, ...props }: { label: string, style?: 
 
 const styles = StyleSheet.create({
   glassWeb: {
-    backgroundColor: 'rgba(255, 255, 255, 0.94)',
-    backdropFilter: 'blur(20px) saturate(140%)',
+    ...glassSurface,
+
     borderWidth: 1,
-    borderColor: '#DCE8E7',
+    borderColor: 'rgba(255,255,255,0.88)',
     borderRadius: radius.card,
     padding: spacing.lg,
     ...Platform.select({
       web: {
-        boxShadow: '0 10px 30px -18px rgba(34, 35, 42, 0.25)',
+        boxShadow: '0 8px 28px -14px rgba(102, 93, 154, 0.22), inset 0 1px 0 rgba(255,255,255,0.9)',
       } as any,
     }),
   },
   glassNative: {
-    backgroundColor: 'rgba(255, 255, 255, 0.94)',
+    backgroundColor: 'rgba(255,255,255,0.6)',
     borderWidth: 1,
-    borderColor: '#DCE8E7',
+    borderColor: 'rgba(255,255,255,0.88)',
     borderRadius: radius.card,
     padding: spacing.lg,
     overflow: 'hidden',
@@ -118,7 +127,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: radius.pill,
     alignSelf: 'flex-start',
-    flexShrink: 0,
+    flexShrink: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -163,22 +172,22 @@ const styles = StyleSheet.create({
   },
   glassInputWeb: {
     minHeight: 52,
-    backgroundColor: 'rgba(255, 255, 255, 0.94)',
+    backgroundColor: 'rgba(255,255,255,0.6)',
     backdropFilter: 'blur(20px)',
     borderWidth: 1,
-    borderColor: '#DCE8E7',
+    borderColor: 'rgba(255,255,255,0.88)',
     borderRadius: radius.input,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     ...typography.body,
-    fontSize: 15,
+    fontSize: 16,
     color: colors.ink,
     outlineStyle: 'none',
   } as any,
   glassInputNative: {
-    backgroundColor: 'rgba(255, 255, 255, 0.94)',
+    backgroundColor: 'rgba(255,255,255,0.6)',
     borderWidth: 1,
-    borderColor: '#DCE8E7',
+    borderColor: 'rgba(255,255,255,0.88)',
     borderRadius: radius.input,
     overflow: 'hidden',
   },
@@ -190,7 +199,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     ...typography.body,
-    fontSize: 15,
+    fontSize: 16,
     color: colors.ink,
   },
 });

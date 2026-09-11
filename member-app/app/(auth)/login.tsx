@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ShieldCheck } from 'lucide-react-native';
+import { getMyProfile } from '../../src/services/membersService';
 import { Glass, GlassInput } from '../../src/components/ui-kit';
 import { Screen } from '../../src/components/PhoneFrame';
-import { colors, radius, spacing, typography, shadows } from '../../src/constants/theme';
+import { colors, spacing, typography, shadows } from '../../src/constants/theme';
 import { useAuth } from '../../src/store/AuthContext';
 
 export default function LoginScreen() {
@@ -24,7 +25,6 @@ export default function LoginScreen() {
     try {
       await login(email.trim(), password);
       try {
-        const { getMyProfile } = require('../../src/services/membersService');
         const profile = await getMyProfile();
         const isProfileIncomplete = !profile.mobile || !profile.studentNumber || !profile.department || !profile.emergencyContactName || !profile.emergencyContactPhone;
         if (isProfileIncomplete) {
@@ -44,16 +44,16 @@ export default function LoginScreen() {
 
   return (
     <Screen padded>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.header}>
-          <Glass style={styles.iconWrapper}>
-            <ShieldCheck size={34} strokeWidth={1.6} color={colors.indigoink} />
-          </Glass>
-          <Text style={styles.title}>Safety Platform</Text>
-          <Text style={styles.subtitle}>
-            You are not alone. Report ragging safely, anonymously if you want, and we will take it from there.
-          </Text>
-        </View>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        <Glass style={styles.header}>
+          <View style={styles.brand}><ShieldCheck size={22} color={colors.mintInk} /><Text style={styles.brandText}>SAFETY PLATFORM</Text></View>
+          <View pointerEvents="none" style={styles.orbit} />
+          <Text style={styles.title}>Your space.{'\n'}Your support.</Text>
+          <Text style={styles.subtitle}>A trusted circle, a way to speak up, and help within reach.</Text>
+          <View style={styles.tag}><Text style={styles.tagText}>Here for your everyday</Text></View>
+        </Glass>
+        <Text style={styles.welcome}>Welcome back</Text>
 
         <View style={styles.form}>
           <GlassInput
@@ -77,6 +77,7 @@ export default function LoginScreen() {
 
         <Pressable
           style={[styles.button, !canSubmit && styles.buttonDisabled]}
+          accessibilityRole="button"
           onPress={handleSubmit}
           disabled={!canSubmit}
         >
@@ -87,18 +88,19 @@ export default function LoginScreen() {
           )}
         </Pressable>
 
-        <Pressable onPress={() => router.push('/(auth)/register' as any)}>
+        <Pressable accessibilityRole="button" style={{ minHeight: 48, justifyContent: 'center' }} onPress={() => router.push('/(auth)/register' as any)}>
           <Text style={styles.linkText}>New here? Create an account</Text>
         </Pressable>
 
-        <Pressable onPress={() => router.push('/(auth)/forgot-password' as any)}>
+        <Pressable accessibilityRole="button" style={{ minHeight: 48, justifyContent: 'center' }} onPress={() => router.push('/(auth)/forgot-password' as any)}>
           <Text style={styles.forgotText}>Forgot your password?</Text>
         </Pressable>
 
         <Text style={styles.footnote}>
-          Your details stay private. Incident reports never show your name to anyone on the committee.
+          Choose a named or anonymous report. Review what you share before sending.
         </Text>
       </ScrollView>
+      </KeyboardAvoidingView>
     </Screen>
   );
 }
@@ -107,34 +109,18 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: spacing.xxl,
   },
-  header: {
-    alignItems: 'center',
-    paddingTop: 40,
-  },
-  iconWrapper: {
-    width: 80,
-    height: 80,
-    borderRadius: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    ...typography.h1,
-    fontSize: 30,
-    color: colors.ink,
-    marginTop: 24,
-  },
-  subtitle: {
-    ...typography.body,
-    fontSize: 14,
-    color: colors.subink,
-    marginTop: 8,
-    textAlign: 'center',
-    maxWidth: 260,
-  },
+  header: { borderRadius: 32, padding: 26, overflow: 'hidden', gap: 18 },
+  brand: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  brandText: { ...typography.label, fontSize: 11, color: colors.mintInk, letterSpacing: 1.5 },
+  orbit: { position: 'absolute', right: -85, top: 30, width: 210, height: 210, borderRadius: 105, borderWidth: 1, borderColor: 'rgba(255,255,255,0.85)' },
+  title: { ...typography.h1, fontSize: 37, color: colors.ink, lineHeight: 43 },
+  subtitle: { ...typography.body, fontSize: 15, color: colors.subink, maxWidth: 255 },
+  tag: { alignSelf: 'flex-start', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: 'rgba(213,242,228,0.8)' },
+  tagText: { ...typography.caption, color: '#244A3A' },
+  welcome: { ...typography.h2, color: colors.ink, marginTop: 28 },
   form: {
-    marginTop: 40,
-    gap: spacing.lg,
+    marginTop: 20,
+    gap: 4,
   },
   error: {
     ...typography.caption,
@@ -148,7 +134,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 20,
     alignItems: 'center',
-    marginTop: 32,
+    marginTop: 16,
     ...shadows.soft,
   },
   buttonDisabled: {

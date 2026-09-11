@@ -1,8 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Home, List, User } from 'lucide-react-native';
-import { colors, radius, spacing, typography, shadows } from '../constants/theme';
+import { Frost } from './GlassSurface';
+import { radius, spacing, typography, shadows } from '../constants/theme';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 
 const icons = {
@@ -18,6 +19,7 @@ const labels = {
 };
 
 export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+  const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === 'web';
 
   const content = (
@@ -55,9 +57,9 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
             <Icon
               size={22}
               strokeWidth={1.8}
-              color={isFocused ? colors.indigoink : colors.mutedink}
+              color={isFocused ? '#514582' : '#62677E'}
             />
-            <Text style={[styles.tabLabel, { color: isFocused ? colors.indigoink : colors.mutedink }]}>
+            <Text style={[styles.tabLabel, { color: isFocused ? '#514582' : '#62677E' }]}>
               {label}
             </Text>
           </Pressable>
@@ -67,27 +69,27 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   );
 
   if (isWeb) {
-    return <View style={styles.barWeb}>{content}</View>;
+    return <View style={styles.barWeb}><Frost />{content}</View>;
   }
 
   return (
-    <View style={styles.barNative}>
-      <BlurView intensity={20} tint="light" style={StyleSheet.absoluteFill} />
-      {content}
+    <View style={[styles.barNative, { bottom: Math.max(insets.bottom, spacing.md) }]}>
+      <Frost />{content}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   barWeb: {
+    overflow: 'hidden',
     position: 'absolute',
     left: spacing.md,
     right: spacing.md,
     bottom: spacing.md,
-    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+    backgroundColor: 'rgba(255,255,255,0.76)',
     backdropFilter: 'blur(20px) saturate(150%)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.65)',
+    borderColor: 'rgba(255,255,255,0.95)',
     borderRadius: radius.tabBar,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.sm,
@@ -102,9 +104,9 @@ const styles = StyleSheet.create({
     left: spacing.md,
     right: spacing.md,
     bottom: spacing.md,
-    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+    backgroundColor: 'rgba(255,255,255,0.76)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.65)',
+    borderColor: 'rgba(255,255,255,0.95)',
     borderRadius: radius.tabBar,
     overflow: 'hidden',
     ...shadows.soft,
@@ -116,7 +118,7 @@ const styles = StyleSheet.create({
     paddingVertical: Platform.OS === 'web' ? 0 : spacing.md,
   },
   tabActive: {
-    backgroundColor: colors.mintTint,
+    backgroundColor: 'rgba(218,207,248,0.72)',
   },
   tabItem: {
     flex: 1,

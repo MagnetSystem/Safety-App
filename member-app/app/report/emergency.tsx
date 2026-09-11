@@ -135,7 +135,7 @@ export default function EmergencyScreen() {
       getMyProfile().catch(() => null),
       listMyGuardians().catch(() => []),
     ]);
-    const connected = guardians.filter((g) => g.status === 'ACCEPTED' || g.guardian).length;
+    const connected = guardians.filter((g) => g.status === 'ACTIVE' || g.guardian).length;
     applyContext(profile, connected, Math.max(0, guardians.length - connected));
 
     const result = await sendEmergencySos((loc) => {

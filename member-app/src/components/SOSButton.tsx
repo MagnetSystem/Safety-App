@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Animated, Easing, AccessibilityInfo, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect } from 'expo-router';
 import Svg, { Circle } from 'react-native-svg';
 import { colors, gradients, typography } from '../constants/theme';
 import { heavyFeedback, lightFeedback, tapFeedback } from '../services/haptics';
@@ -12,13 +13,11 @@ const STROKE = 7;
 const RADIUS = (SIZE - STROKE) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
-export function SOSButton({ onArmed }: { onArmed: () => void }) {
-  const wave1Ref = useRef<Animated.Value | null>(null);
-  const wave2Ref = useRef<Animated.Value | null>(null);
-  wave1Ref.current ??= new Animated.Value(0);
-  wave2Ref.current ??= new Animated.Value(0);
-
-  const progress = useRef(new Animated.Value(0)).current;
+export function SOSButton({ onArmed, dark = false }: { onArmed: () => void; dark?: boolean }) {
+  const [wave1] = useState(() => new Animated.Value(0));
+  const [wave2] = useState(() => new Animated.Value(0));
+  const [progress] = useState(() => new Animated.Value(0));
+  const [armed, setArmed] = useState(false);
   const holdAnim = useRef<Animated.CompositeAnimation | null>(null);
   const fired = useRef(false);
   const tickTimer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -27,9 +26,25 @@ export function SOSButton({ onArmed }: { onArmed: () => void }) {
   const [secondsLeft, setSecondsLeft] = useState(2);
   const [holdProgress, setHoldProgress] = useState(0);
 
+  const [reduceMotion, setReduceMotion] = useState(true);
   useEffect(() => {
-    const wave1 = wave1Ref.current!;
-    const wave2 = wave2Ref.current!;
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => subscription.remove();
+  }, []);
+  useFocusEffect(React.useCallback(() => {
+    fired.current = false;
+    setArmed(false);
+    progress.setValue(0);
+    setHolding(false);
+    setHint(false);
+    return () => {
+      holdAnim.current?.stop();
+      if (tickTimer.current) clearInterval(tickTimer.current);
+    };
+  }, [progress]));
+  useEffect(() => {
+    if (reduceMotion || !holding) return;
     const createWave = (animValue: Animated.Value) =>
       Animated.loop(
         Animated.sequence([
@@ -53,7 +68,7 @@ export function SOSButton({ onArmed }: { onArmed: () => void }) {
       clearTimeout(timer);
       if (tickTimer.current) clearInterval(tickTimer.current);
     };
-  }, []);
+  }, [holding, reduceMotion, wave1, wave2]);
 
   useEffect(() => {
     const id = progress.addListener(({ value }) => {
@@ -79,6 +94,7 @@ export function SOSButton({ onArmed }: { onArmed: () => void }) {
   const arm = () => {
     if (fired.current) return;
     fired.current = true;
+    setArmed(true);
     stopHold(false);
     heavyFeedback();
     onArmed();
@@ -114,11 +130,11 @@ export function SOSButton({ onArmed }: { onArmed: () => void }) {
       {
         scale: animValue.interpolate({
           inputRange: [0, 1],
-          outputRange: [1, 1.8],
+          outputRange: [1, 1.12],
         }),
       },
     ],
-    opacity: animValue.interpolate({
+    opacity: !holding || reduceMotion ? 0 : animValue.interpolate({
       inputRange: [0, 0.6, 1],
       outputRange: [0.5, 0.2, 0],
     }),
@@ -129,8 +145,8 @@ export function SOSButton({ onArmed }: { onArmed: () => void }) {
   return (
     <View style={styles.wrap}>
       <View style={styles.sosContainer}>
-        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.sosRing, { backgroundColor: '#e05c5c' }, ringStyle(wave1Ref.current)]} />
-        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.sosRing, { backgroundColor: '#e05c5c' }, ringStyle(wave2Ref.current)]} />
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.sosRing, { backgroundColor: '#e05c5c' }, ringStyle(wave1)]} />
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.sosRing, { backgroundColor: '#e05c5c' }, ringStyle(wave2)]} />
 
         <Svg width={SIZE} height={SIZE} style={styles.progressSvg}>
           <Circle
@@ -155,10 +171,14 @@ export function SOSButton({ onArmed }: { onArmed: () => void }) {
         </Svg>
 
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Emergency SOS"
+          accessibilityHint="Hold for two seconds to send an alert. Screen reader users can activate to confirm."
+          onAccessibilityTap={() => Alert.alert('Send emergency SOS?', 'This alerts your configured recipients.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Send SOS', onPress: arm }])}
           onPressIn={onPressIn}
           onPressOut={onPressOut}
           onPress={onPressOut}
-          disabled={fired.current}
+          disabled={armed}
           style={styles.sosBtnWrapper}
         >
           <LinearGradient colors={gradients.coral} locations={gradients.coralLocations} style={styles.sosGradient}>
@@ -167,8 +187,8 @@ export function SOSButton({ onArmed }: { onArmed: () => void }) {
           </LinearGradient>
         </Pressable>
       </View>
-      <Text style={[styles.holdHint, hint && styles.holdHintActive]}>
-        {hint ? 'Hold the button to send SOS' : 'Hold to send SOS'}
+      <Text style={[styles.holdHint, dark && { color: '#E0E3F0' }, hint && styles.holdHintActive]}>
+        {hint ? 'Keep holding for 2 seconds to send' : 'Hold for 2 seconds to send SOS'}
       </Text>
     </View>
   );
@@ -199,9 +219,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     shadowColor: '#E0605C',
     shadowOffset: { width: 0, height: 18 },
-    shadowOpacity: 0.8,
+    shadowOpacity: 0.18,
     shadowRadius: 40,
-    elevation: 24,
+    elevation: 5,
   },
   sosGradient: {
     flex: 1,
@@ -216,7 +236,7 @@ const styles = StyleSheet.create({
   },
   sosSubtitle: {
     fontFamily: 'Inter_400Regular',
-    fontSize: 11,
+    fontSize: 13,
     color: 'rgba(255, 255, 255, 0.9)',
     marginTop: 4,
   },

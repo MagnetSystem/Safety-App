@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -23,6 +23,9 @@ export default function NewReportScreen() {
   const router = useRouter();
   const { mode } = useLocalSearchParams<{ mode: 'normal' | 'anonymous' }>();
   const isAnonymous = mode === 'anonymous';
+  const scroll = useRef<ScrollView>(null);
+  const [step, setStep] = useState(0);
+  const goToStep = (next: number) => { setStep(next); setError(null); scroll.current?.scrollTo({ y: 0, animated: false }); };
   const [category, setCategory] = useState<IncidentCategoryEnum>(CATEGORY_OPTIONS[0]);
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
@@ -135,17 +138,22 @@ export default function NewReportScreen() {
 
   return (
     <Screen padded>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView ref={scroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <ScreenHeader
-          title={isAnonymous ? 'Incident report' : 'Normal report'}
+          title={isAnonymous ? 'Anonymous report' : 'Report an issue'}
           subtitle={
             isAnonymous
-              ? 'Your name is never attached to this report'
+              ? 'Your identity is hidden in anonymous reporting'
               : 'Filed with your name so the committee can follow up'
           }
           back="/(tabs)/home"
+          onBack={step > 0 ? () => goToStep(step - 1) : undefined}
         />
 
+        <View accessibilityLabel={`Step ${step + 1} of 3`} style={styles.steps}>
+          {['Incident', 'Details', 'Review'].map((label, index) => <View key={label} style={styles.stepItem}><View style={[styles.stepNumber, index <= step && { backgroundColor: colors.mint }]}><Text style={{ ...typography.label, color: index <= step ? '#FFFFFF' : colors.subink }}>{index + 1}</Text></View><Text style={{ ...typography.label, color: index === step ? colors.mintInk : colors.subink }}>{label}</Text></View>)}
+        </View>
         <View style={[styles.identityPill, { backgroundColor: accentBg }]}>
           <Text style={[styles.identityText, { color: accentText }]}>
             {isAnonymous ? 'Identity hidden' : 'Identity shared'}
@@ -153,13 +161,15 @@ export default function NewReportScreen() {
         </View>
 
         <View style={styles.formContainer}>
-          <Glass style={styles.categoryCard}>
+          {step === 0 && <Glass style={styles.categoryCard}>
             <Text style={styles.label}>What kind of incident was it?</Text>
             <View style={styles.chipsContainer}>
               {CATEGORY_OPTIONS.map((c) => {
                 const active = c === category;
                 return (
                   <Pressable
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: active }}
                     key={c}
                     onPress={() => setCategory(c)}
                     style={[
@@ -179,8 +189,9 @@ export default function NewReportScreen() {
                 );
               })}
             </View>
-          </Glass>
+          </Glass>}
 
+          {step === 1 && <>
           <GlassInput
             label="Tell us what happened"
             placeholder="Take your time. Write it the way you remember it — who was involved, what they did, and when."
@@ -192,7 +203,7 @@ export default function NewReportScreen() {
           />
 
           <GlassInput
-            label="Where did it happen?"
+            label="Where did it happen? (optional)"
             placeholder="Hostel B-block, 2nd floor corridor"
             value={location}
             onChangeText={setLocation}
@@ -211,7 +222,7 @@ export default function NewReportScreen() {
                       <FileText size={16} color={accentText} />
                     )}
                     <Text style={styles.attachmentName} numberOfLines={1}>{a.name}</Text>
-                    <Pressable onPress={() => removeAttachment(a.uri)} hitSlop={8}>
+                    <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${a.name}`} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }} onPress={() => removeAttachment(a.uri)}>
                       <X size={16} color={colors.mutedink} />
                     </Pressable>
                   </View>
@@ -235,30 +246,47 @@ export default function NewReportScreen() {
             )}
           </View>
 
+          </>}
+          {step === 2 && <Glass style={{ gap: 16 }}>
+            <Text style={{ ...typography.h2, color: colors.ink }}>Ready when you are</Text>
+            <Text style={{ ...typography.body, color: colors.subink }}>Check the details before sending. {isAnonymous ? 'Avoid names or identifying details in your description and attachments if you want to remain anonymous.' : 'Your name will be shared with the committee.'}</Text>
+            <Text style={styles.label}>Incident</Text><Text style={{ ...typography.body, color: colors.ink }}>{categoryLabel(category)}</Text>
+            <Text style={styles.label}>Your description</Text><Text style={{ ...typography.body, color: colors.ink }}>{description}</Text>
+            <Text style={styles.label}>Location</Text><Text style={{ ...typography.body, color: colors.ink }}>{location.trim() || 'Not provided'}</Text>
+            <Text style={styles.label}>Evidence</Text><Text style={{ ...typography.body, color: colors.ink }}>{attachments.length ? attachments.map(a => a.name).join(', ') : 'No attachments'}</Text>
+            <Text style={{ ...typography.caption, color: colors.subink }}>If you allow location access, your current GPS location will also be included.</Text>
+            <Pressable accessibilityRole="button" disabled={submitting} onPress={() => goToStep(1)} style={styles.editDetails}><Text style={{ ...typography.label, color: colors.mintInk }}>Edit details</Text></Pressable>
+          </Glass>}
           {error && <Text style={styles.error}>{error}</Text>}
           {uploadNote && <Text style={styles.uploadNote}>{uploadNote}</Text>}
 
           <Pressable
-            style={[styles.submitButton, { backgroundColor: submitBg }, !canSubmit && styles.submitButtonDisabled]}
-            onPress={handleSubmit}
-            disabled={!canSubmit}
+            style={[styles.submitButton, { backgroundColor: submitBg }, (step > 0 && !canSubmit) && styles.submitButtonDisabled]}
+            accessibilityRole="button"
+            onPress={() => step < 2 ? goToStep(step + 1) : void handleSubmit()}
+            disabled={submitting || (step > 0 && !canSubmit)}
           >
             {submitting ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.submitText}>Submit report</Text>
+              <Text style={styles.submitText}>{step === 0 ? 'Continue to details' : step === 1 ? 'Review report' : 'Submit report'}</Text>
             )}
           </Pressable>
           <Text style={styles.footnote}>
-            The anti-ragging committee usually responds within 24 hours.
+            {step === 1 ? 'A short description is required. Location and evidence are optional.' : 'You can follow updates in My reports after submitting.'}
           </Text>
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  steps: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginBottom: 16 },
+  stepItem: { flex: 1, alignItems: 'center', gap: 8 },
+  stepNumber: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.neutralTint, alignItems: 'center', justifyContent: 'center' },
+  editDetails: { minHeight: 48, justifyContent: 'center' },
   scrollContent: {
     paddingBottom: spacing.xxl,
   },
@@ -282,7 +310,7 @@ const styles = StyleSheet.create({
   },
   label: {
     ...typography.body,
-    fontSize: 14,
+    fontSize: 16,
     color: colors.subink,
     marginBottom: spacing.md,
   },
@@ -292,6 +320,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   chip: {
+    minHeight: 44,
+    justifyContent: 'center',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: radius.pill,

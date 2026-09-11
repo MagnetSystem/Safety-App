@@ -1,16 +1,16 @@
 import React, { useCallback, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, Linking, Pressable, TextInput,
+  View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, Linking, Pressable, TextInput, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { MapPin, FileCheck2, Paperclip, Send } from 'lucide-react-native';
 import { Screen } from '../../src/components/PhoneFrame';
-import { Glass, ScreenHeader, StatusPill } from '../../src/components/ui-kit';
+import { Glass, ScreenHeader, StatusPill, EmptyState, LoadingCards } from '../../src/components/ui-kit';
 import {
   getReportById, getMessages, postMessage, type ComplaintMessage,
 } from '../../src/services/incidentsService';
 import { getEvidence } from '../../src/services/evidenceService';
-import { categoryLabel, statusLabel, WORKFLOW_STATUSES, type EvidenceItem, type Report } from '../../src/types';
+import { categoryLabel, statusLabel, type EvidenceItem, type Report } from '../../src/types';
 import { colors, radius, spacing, typography } from '../../src/constants/theme';
 
 export default function ReportDetailScreen() {
@@ -69,28 +69,27 @@ export default function ReportDetailScreen() {
   if (loading) {
     return (
       <Screen padded>
-        <ActivityIndicator color={colors.indigoink} style={styles.loading} />
+        <LoadingCards />
       </Screen>
     );
   }
 
-  if (error || !report) {
+  if (!report) {
     return (
       <Screen padded>
         <ScreenHeader title="Report" back="/(tabs)/reports" />
-        <Glass style={styles.card}>
-          <Text style={styles.bodyText}>{error ?? 'Report not found.'}</Text>
-        </Glass>
+        <EmptyState title="Report unavailable" message={error ?? 'Report not found.'} onRetry={() => load()} />
       </Screen>
     );
   }
 
-  const currentStepIndex = WORKFLOW_STATUSES.indexOf(report.status);
-  const timelineByStatus = new Map(report.timeline.map((t) => [t.status, t]));
+  const timeline = [...(report.timeline ?? [])].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
   return (
     <Screen padded>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={colors.indigoink} />}
@@ -101,6 +100,7 @@ export default function ReportDetailScreen() {
           back="/(tabs)/reports"
         />
 
+        {error && <EmptyState title="Something needs another try" message={error} onRetry={() => load(true)} />}
         <View style={styles.badgesRow}>
           <StatusPill status={report.status} />
           <View style={[styles.typeBadge, { backgroundColor: report.type === 'ANONYMOUS' ? colors.lavenderTint : colors.mintTint }]}>
@@ -187,6 +187,7 @@ export default function ReportDetailScreen() {
 
           <View style={styles.composer}>
             <TextInput
+              accessibilityLabel="Message to the committee"
               style={styles.composerInput}
               placeholder="Write a message…"
               placeholderTextColor={colors.mutedink}
@@ -196,6 +197,8 @@ export default function ReportDetailScreen() {
             />
             <Pressable
               style={[styles.composerSend, (!draft.trim() || sending) && styles.composerSendDisabled]}
+              accessibilityRole="button"
+              accessibilityLabel="Send message"
               onPress={sendMessage}
               disabled={!draft.trim() || sending}
             >
@@ -207,12 +210,13 @@ export default function ReportDetailScreen() {
         <Glass style={styles.progressCard}>
           <Text style={styles.progressTitle}>Progress</Text>
           <View style={styles.timeline}>
-            {WORKFLOW_STATUSES.map((step, i) => {
-              const done = i <= currentStepIndex;
-              const isLast = i === WORKFLOW_STATUSES.length - 1;
-              const entry = timelineByStatus.get(step);
+            {timeline.length === 0 && <Text style={styles.bodyText}>No progress updates yet. Current status: {statusLabel(report.status)}.</Text>}
+            {timeline.map((entry, i) => {
+              const step = entry.status;
+              const done = true;
+              const isLast = i === timeline.length - 1;
               return (
-                <View key={step} style={styles.timelineRow}>
+                <View key={entry.id} style={styles.timelineRow}>
                   <View style={styles.timelineDotCol}>
                     <View style={[styles.dot, done ? styles.dotDone : styles.dotUpcoming]} />
                     {!isLast && <View style={[styles.line, done ? styles.lineDone : styles.lineUpcoming]} />}
@@ -234,6 +238,7 @@ export default function ReportDetailScreen() {
           </View>
         </Glass>
       </ScrollView>
+      </KeyboardAvoidingView>
     </Screen>
   );
 }
@@ -258,7 +263,7 @@ const styles = StyleSheet.create({
   },
   typeText: {
     ...typography.caption,
-    fontSize: 11,
+    fontSize: 13,
     fontFamily: 'Inter_500Medium',
   },
   card: {
@@ -290,7 +295,7 @@ const styles = StyleSheet.create({
   },
   evidenceName: {
     ...typography.body,
-    fontSize: 13,
+    fontSize: 15,
     color: colors.indigoink,
     flex: 1,
   },
@@ -323,20 +328,20 @@ const styles = StyleSheet.create({
   },
   bubbleAuthor: {
     ...typography.caption,
-    fontSize: 11,
+    fontSize: 13,
     fontFamily: 'Inter_500Medium',
     color: colors.subink,
     marginBottom: 2,
   },
   bubbleBody: {
     ...typography.body,
-    fontSize: 13,
+    fontSize: 15,
     color: colors.ink,
     lineHeight: 19,
   },
   bubbleDate: {
     ...typography.caption,
-    fontSize: 10,
+    fontSize: 12,
     color: colors.mutedink,
     marginTop: 4,
   },
@@ -348,7 +353,7 @@ const styles = StyleSheet.create({
   composerInput: {
     flex: 1,
     ...typography.body,
-    fontSize: 14,
+    fontSize: 16,
     color: colors.ink,
     backgroundColor: 'rgba(255, 255, 255, 0.7)',
     borderRadius: radius.md,
@@ -357,8 +362,8 @@ const styles = StyleSheet.create({
     maxHeight: 100,
   },
   composerSend: {
-    width: 40,
-    height: 40,
+    width: 48,
+    height: 48,
     borderRadius: 20,
     backgroundColor: colors.indigoink,
     alignItems: 'center',
@@ -374,7 +379,7 @@ const styles = StyleSheet.create({
   },
   bodyText: {
     ...typography.body,
-    fontSize: 14,
+    fontSize: 16,
     color: colors.ink,
     lineHeight: 22,
   },
@@ -436,7 +441,7 @@ const styles = StyleSheet.create({
   },
   stepText: {
     ...typography.body,
-    fontSize: 14,
+    fontSize: 16,
   },
   stepTextDone: {
     fontFamily: 'Inter_500Medium',
