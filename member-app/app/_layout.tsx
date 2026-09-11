@@ -64,7 +64,7 @@ export default function RootLayout() {
             <Stack.Screen name="(auth)/forgot-password" />
             <Stack.Screen name="(auth)/reset-password" />
             <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="report/emergency" options={{ presentation: 'fullScreenModal' }} />
+            <Stack.Screen name="report/emergency" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
             <Stack.Screen name="report/new" />
             <Stack.Screen name="reports/[id]" />
             <Stack.Screen name="notifications" />

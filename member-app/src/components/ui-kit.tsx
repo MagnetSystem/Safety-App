@@ -41,7 +41,7 @@ export function ScreenHeader({ title, subtitle, back, onBack }: { title: string,
     <View style={styles.headerContainer}>
       {(back || onBack) && (
         <Pressable
-          style={styles.backButton}
+          accessibilityRole="button" accessibilityLabel="Go back" style={styles.backButton}
           onPress={() => {
             if (onBack) return onBack();
             if (router.canGoBack()) return router.back();
@@ -68,8 +68,9 @@ export function GlassInput({ label, style, ...props }: { label: string, style?: 
         <TextInput
           {...props}
           style={[styles.glassInputWeb, isFocused && styles.glassInputFocused, style] as any}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
+          accessibilityLabel={props.accessibilityLabel ?? label}
+          onFocus={(event) => { setIsFocused(true); props.onFocus?.(event); }}
+          onBlur={(event) => { setIsFocused(false); props.onBlur?.(event); }}
           placeholderTextColor={colors.mutedink}
         />
       ) : (
@@ -78,8 +79,9 @@ export function GlassInput({ label, style, ...props }: { label: string, style?: 
           <TextInput
             {...props}
             style={[styles.nativeInput, style] as any}
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
+            accessibilityLabel={props.accessibilityLabel ?? label}
+          onFocus={(event) => { setIsFocused(true); props.onFocus?.(event); }}
+            onBlur={(event) => { setIsFocused(false); props.onBlur?.(event); }}
             placeholderTextColor={colors.mutedink}
           />
         </View>
@@ -90,10 +92,10 @@ export function GlassInput({ label, style, ...props }: { label: string, style?: 
 
 const styles = StyleSheet.create({
   glassWeb: {
-    backgroundColor: 'rgba(255, 255, 255, 0.55)',
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
     backdropFilter: 'blur(20px) saturate(140%)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.6)',
+    borderColor: '#DCE8E7',
     borderRadius: radius.card,
     padding: spacing.lg,
     ...Platform.select({
@@ -103,9 +105,9 @@ const styles = StyleSheet.create({
     }),
   },
   glassNative: {
-    backgroundColor: 'rgba(255, 255, 255, 0.55)',
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.6)',
+    borderColor: '#DCE8E7',
     borderRadius: radius.card,
     padding: spacing.lg,
     overflow: 'hidden',
@@ -128,6 +130,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xxl,
   },
   backButton: {
+    minHeight: 44,
+    alignSelf: 'flex-start',
+    paddingRight: 16,
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: spacing.md,
@@ -157,10 +162,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   glassInputWeb: {
-    backgroundColor: 'rgba(255, 255, 255, 0.55)',
+    minHeight: 52,
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
     backdropFilter: 'blur(20px)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.6)',
+    borderColor: '#DCE8E7',
     borderRadius: radius.input,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
@@ -170,16 +176,17 @@ const styles = StyleSheet.create({
     outlineStyle: 'none',
   } as any,
   glassInputNative: {
-    backgroundColor: 'rgba(255, 255, 255, 0.55)',
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.6)',
+    borderColor: '#DCE8E7',
     borderRadius: radius.input,
     overflow: 'hidden',
   },
   glassInputFocused: {
-    borderColor: 'rgba(91, 110, 232, 0.5)',
+    borderColor: colors.mint,
   },
   nativeInput: {
+    minHeight: 52,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     ...typography.body,

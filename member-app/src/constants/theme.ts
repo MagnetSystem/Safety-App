@@ -1,8 +1,8 @@
 // Single source of truth for colors, type scale, and spacing.
 export const colors = {
-  ink: '#22232A',
-  subink: '#5A5A66',
-  mutedink: '#8A8A94',
+  ink: '#182E35',
+  subink: '#52656D',
+  mutedink: '#667580',
   indigoink: '#0F766E',
   mint: '#0D9488',
   mintTint: '#CCFBF1',
@@ -34,9 +34,9 @@ export const shadows = {
   soft: {
     shadowColor: '#22232A',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.07,
     shadowRadius: 30,
-    elevation: 8,
+    elevation: 2,
   },
 };
 

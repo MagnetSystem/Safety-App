@@ -1,97 +1,17 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Animated, ScrollView, Easing, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { FileText, UserX, Bell, LifeBuoy } from 'lucide-react-native';
 import { Screen } from '../../src/components/PhoneFrame';
 import { Glass, StatusPill } from '../../src/components/ui-kit';
-import { colors, radius, spacing, typography, gradients } from '../../src/constants/theme';
-import { LinearGradient } from 'expo-linear-gradient';
+import { SOSButton } from '../../src/components/SOSButton';
+import { colors, spacing, typography } from '../../src/constants/theme';
 import { useAuth } from '../../src/store/AuthContext';
 import { getReports } from '../../src/services/incidentsService';
 import { getMyProfile } from '../../src/services/membersService';
 import { getNotifications } from '../../src/services/notificationsService';
 import { flushSos } from '../../src/services/pendingSos';
-import { tapFeedback } from '../../src/services/haptics';
 import { categoryLabel, type Report, type StudentProfile } from '../../src/types';
-
-function SOSButton() {
-  const router = useRouter();
-  const wave1Ref = React.useRef<Animated.Value>(null);
-  const wave2Ref = React.useRef<Animated.Value>(null);
-  wave1Ref.current ??= new Animated.Value(0);
-  wave2Ref.current ??= new Animated.Value(0);
-
-  React.useEffect(() => {
-    const wave1 = wave1Ref.current!;
-    const wave2 = wave2Ref.current!;
-    const createWave = (animValue: Animated.Value) => {
-      return Animated.loop(
-        Animated.sequence([
-          Animated.timing(animValue, {
-            toValue: 1,
-            duration: 2000,
-            easing: Easing.out(Easing.ease),
-            useNativeDriver: true,
-          }),
-          Animated.timing(animValue, {
-            toValue: 0,
-            duration: 0,
-            useNativeDriver: true,
-          }),
-        ])
-      );
-    };
-
-    const anim1 = createWave(wave1);
-    const anim2 = createWave(wave2);
-
-    anim1.start();
-    const timer = setTimeout(() => {
-      anim2.start();
-    }, 1000);
-
-    return () => {
-      anim1.stop();
-      anim2.stop();
-      clearTimeout(timer);
-    };
-  }, []);
-
-  const ringStyle = (animValue: Animated.Value) => ({
-    transform: [
-      {
-        scale: animValue.interpolate({
-          inputRange: [0, 1],
-          outputRange: [1, 1.8], // RING_MAX_SCALE
-        }),
-      },
-    ],
-    opacity: animValue.interpolate({
-      inputRange: [0, 0.6, 1],
-      outputRange: [0.5, 0.2, 0],
-    }),
-  });
-
-  return (
-    <View style={styles.sosContainer}>
-      <Animated.View style={[StyleSheet.absoluteFill, styles.sosRing, { backgroundColor: '#e05c5c' }, ringStyle(wave1Ref.current)]} />
-      <Animated.View style={[StyleSheet.absoluteFill, styles.sosRing, { backgroundColor: '#e05c5c' }, ringStyle(wave2Ref.current)]} />
-
-      <Pressable
-        onPress={() => {
-          tapFeedback();
-          router.push('/report/emergency');
-        }}
-        style={styles.sosBtnWrapper}
-      >
-        <LinearGradient colors={gradients.coral} locations={gradients.coralLocations} style={styles.sosGradient}>
-          <Text style={styles.sosTitle}>SOS</Text>
-          <Text style={styles.sosSubtitle}>Emergency</Text>
-        </LinearGradient>
-      </Pressable>
-    </View>
-  );
-}
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -129,12 +49,12 @@ export default function HomeScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
           <View style={styles.headerRow}>
-            <View>
+            <View style={{ flex: 1, paddingRight: 12 }}>
               <Text style={styles.greeting}>Good to see you,</Text>
               <Text style={styles.name}>{firstName}</Text>
               <Text style={styles.college}>{profile?.college?.name ?? profile?.organization?.name ?? (inOrganization ? ' ' : 'Personal safety')}</Text>
             </View>
-            <Pressable style={styles.bellButton} onPress={() => router.push('/notifications' as any)}>
+            <Pressable accessibilityRole="button" accessibilityLabel={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'} style={styles.bellButton} onPress={() => router.push('/notifications' as any)}>
               <Glass style={styles.bellGlass}>
                 <Bell size={18} strokeWidth={1.8} color={colors.ink} />
                 {unreadCount > 0 && (
@@ -148,27 +68,27 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.heroSection}>
-          <SOSButton />
+          <SOSButton onArmed={() => router.push('/report/emergency')} />
         </View>
 
         {inOrganization ? (
         <View style={styles.actionGrid}>
-          <Pressable style={styles.actionCard} onPress={() => router.push({ pathname: '/report/new', params: { mode: 'normal' } })}>
+          <Pressable accessibilityRole="button" style={({ pressed }) => [styles.actionCard, pressed && { opacity: 0.7 }]} onPress={() => router.push({ pathname: '/report/new', params: { mode: 'normal' } })}>
             <Glass style={styles.actionGlass}>
               <View style={[styles.iconWrapper, { backgroundColor: colors.mintTint }]}>
                 <FileText size={20} strokeWidth={1.8} color={colors.mint} />
               </View>
-              <Text style={styles.actionTitle}>Normal report</Text>
-              <Text style={styles.actionSubtitle}>Filed with your name attached</Text>
+              <Text style={styles.actionTitle}>Report an issue</Text>
+              <Text style={styles.actionSubtitle}>Send a report with your name</Text>
             </Glass>
           </Pressable>
-          <Pressable style={styles.actionCard} onPress={() => router.push({ pathname: '/report/new', params: { mode: 'anonymous' } })}>
+          <Pressable accessibilityRole="button" style={({ pressed }) => [styles.actionCard, pressed && { opacity: 0.7 }]} onPress={() => router.push({ pathname: '/report/new', params: { mode: 'anonymous' } })}>
             <Glass style={styles.actionGlass}>
               <View style={[styles.iconWrapper, { backgroundColor: colors.lavenderTint }]}>
                 <UserX size={20} strokeWidth={1.8} color={colors.lavender} />
               </View>
-              <Text style={styles.actionTitle}>Incident report</Text>
-              <Text style={styles.actionSubtitle}>Nobody sees who you are</Text>
+              <Text style={styles.actionTitle}>Anonymous report</Text>
+              <Text style={styles.actionSubtitle}>Submit without showing your name</Text>
             </Glass>
           </Pressable>
         </View>
@@ -192,7 +112,7 @@ export default function HomeScreen() {
             <ActivityIndicator color={colors.indigoink} style={styles.loading} />
           ) : reports.length === 0 ? (
             <Glass style={styles.emptyCard}>
-              <Text style={styles.emptyText}>You have not filed any reports yet.</Text>
+              <Text style={styles.emptyText}>No reports yet. Reports you submit will appear here so you can follow their progress.</Text>
             </Glass>
           ) : (
             <View style={styles.reportList}>
@@ -251,17 +171,17 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   bellGlass: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 0,
   },
   bellBadge: {
     position: 'absolute',
-    top: -4,
-    right: -4,
+    top: 1,
+    right: 1,
     minWidth: 18,
     height: 18,
     borderRadius: 9,
@@ -278,10 +198,11 @@ const styles = StyleSheet.create({
   heroSection: {
     alignItems: 'center',
     marginTop: 18,
-    marginBottom: 48,
-    zIndex: -1,
+    marginBottom: 36,
+    zIndex: 1,
   },
   helpLink: {
+    minHeight: 48,
     alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
@@ -290,58 +211,22 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 999,
-    backgroundColor: 'rgba(91, 110, 232, 0.1)',
+    backgroundColor: '#DDF3EE',
   },
   helpLinkText: {
     ...typography.caption,
     color: colors.indigoink,
     fontFamily: 'Inter_500Medium',
   },
-  sosContainer: {
-    width: 176,
-    height: 176,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  sosRing: {
-    borderRadius: 88,
-  },
-  sosBtnWrapper: {
-    width: 144,
-    height: 144,
-    borderRadius: 72,
-    overflow: 'hidden',
-    shadowColor: '#E0605C',
-    shadowOffset: { width: 0, height: 18 },
-    shadowOpacity: 0.8,
-    shadowRadius: 40,
-    elevation: 24,
-  },
-  sosGradient: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sosTitle: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 30,
-    letterSpacing: -0.5,
-    color: '#FFF',
-  },
-  sosSubtitle: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.9)',
-    marginTop: 4,
-  },
   actionGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.md,
     marginBottom: 36,
   },
   actionCard: {
     flex: 1,
+    minWidth: 140,
   },
   actionGlass: {
     padding: spacing.lg,

@@ -1,129 +1,303 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Platform } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  ScrollView,
+  ActivityIndicator,
+  TextInput,
+  BackHandler,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import { useRouter } from 'expo-router';
-import { TriangleAlert, CheckCircle2, ShieldAlert } from 'lucide-react-native';
-import * as Location from 'expo-location';
-import * as Device from 'expo-device';
+import { CheckCircle2, AlertCircle, ShieldAlert, XCircle } from 'lucide-react-native';
 import { Screen } from '../../src/components/PhoneFrame';
-import { GlassInput } from '../../src/components/ui-kit';
-import { colors, radius, spacing, typography, gradients } from '../../src/constants/theme';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useAuth } from '../../src/store/AuthContext';
+import { radius, spacing, typography } from '../../src/constants/theme';
 import { getMyProfile } from '../../src/services/membersService';
-import { createComplaint, postMessage } from '../../src/services/incidentsService';
-import { queueSos } from '../../src/services/pendingSos';
-import { heavyFeedback, successFeedback, warningFeedback } from '../../src/services/haptics';
-import { CATEGORY_OPTIONS, categoryLabel, type IncidentCategoryEnum } from '../../src/types';
+import { postMessage } from '../../src/services/incidentsService';
+import { listMyGuardians } from '../../src/services/guardiansService';
+import { sendEmergencySos, type SosLocationStatus } from '../../src/services/sosService';
+import { successFeedback, warningFeedback } from '../../src/services/haptics';
+import type { StudentProfile } from '../../src/types';
 
-function isNetworkError(err: any): boolean {
-  return !err?.response || err?.code === 'ERR_NETWORK' || err?.message === 'Network Error';
+type StepState = 'pending' | 'done' | 'warn' | 'fail';
+
+function StatusRow({ state, label, detail }: { state: StepState; label: string; detail?: string }) {
+  return (
+    <View style={styles.stepRow}>
+      <View style={styles.stepIcon}>
+        {state === 'pending' && <ActivityIndicator color="#FFFFFF" size="small" />}
+        {state === 'done' && <CheckCircle2 size={22} color="#FFFFFF" strokeWidth={2} />}
+        {state === 'warn' && <AlertCircle size={22} color="#FFE8A3" strokeWidth={2} />}
+        {state === 'fail' && <XCircle size={22} color="rgba(255,255,255,0.85)" strokeWidth={2} />}
+      </View>
+      <View style={styles.stepText}>
+        <Text style={styles.stepLabel}>{label}</Text>
+        {detail ? <Text style={styles.stepDetail}>{detail}</Text> : null}
+      </View>
+    </View>
+  );
 }
 
 export default function EmergencyScreen() {
   const router = useRouter();
-  const { user } = useAuth();
-  const [note, setNote] = useState('');
-  const [category, setCategory] = useState<IncidentCategoryEnum>(CATEGORY_OPTIONS[0]);
-  const [submitted, setSubmitted] = useState(false);
+  const started = useRef(false);
+
+  const [locationState, setLocationState] = useState<StepState>('pending');
+  const [locationStatus, setLocationStatus] = useState<SosLocationStatus | null>(null);
+  const [alertState, setAlertState] = useState<StepState>('pending');
+  const [committeeState, setCommitteeState] = useState<StepState>('pending');
+  const [guardianState, setGuardianState] = useState<StepState>('pending');
+  const [committeeDetail, setCommitteeDetail] = useState<string | undefined>();
+  const [guardianDetail, setGuardianDetail] = useState<string | undefined>();
+
   const [queuedOffline, setQueuedOffline] = useState(false);
   const [complaintId, setComplaintId] = useState<string | null>(null);
-  const [safeMarked, setSafeMarked] = useState(false);
-  const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [locationStatus, setLocationStatus] = useState<'idle' | 'active' | 'denied'>('idle');
-  const [displayName, setDisplayName] = useState(user?.email ?? '');
+  const [finished, setFinished] = useState(false);
+  const [safeMarked, setSafeMarked] = useState(false);
+  const [note, setNote] = useState('');
+  const [noteSaved, setNoteSaved] = useState(false);
+  const [noteBusy, setNoteBusy] = useState(false);
+  const [retrying, setRetrying] = useState(false);
 
-  React.useEffect(() => {
-    getMyProfile()
-      .then((p) => setDisplayName(p.name))
-      .catch(() => {});
+  const inOrgRef = useRef(false);
+  const connectedGuardiansRef = useRef(0);
+  const pendingGuardiansRef = useRef(0);
+
+  const applyContext = useCallback((profile: StudentProfile | null, connected: number, pending: number) => {
+    inOrgRef.current = !!(profile?.organizationId || profile?.college?.id);
+    connectedGuardiansRef.current = connected;
+    pendingGuardiansRef.current = pending;
   }, []);
 
-  const handleSend = async () => {
-    setError(null);
-    setSending(true);
-    heavyFeedback();
-
-    let gps: { gpsLat?: number; gpsLng?: number; gpsAccuracy?: number } = {};
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        const position = await Location.getCurrentPositionAsync({});
-        gps = {
-          gpsLat: position.coords.latitude,
-          gpsLng: position.coords.longitude,
-          gpsAccuracy: position.coords.accuracy ?? undefined,
-        };
-        setLocationStatus('active');
-      } else {
-        setLocationStatus('denied');
-      }
-    } catch {
-      setLocationStatus('denied');
+  const finishAlertRows = useCallback((opts: { queued: boolean; failed: boolean; error?: string | null }) => {
+    if (opts.failed) {
+      setAlertState('fail');
+      setCommitteeState('fail');
+      setGuardianState('fail');
+      setCommitteeDetail(undefined);
+      setGuardianDetail(undefined);
+      setError(opts.error ?? 'Could not send the alert.');
+      warningFeedback();
+      setFinished(true);
+      return;
     }
 
-    const deviceInfo = `${Device.modelName ?? Platform.OS} · ${Device.osName ?? Platform.OS} ${Device.osVersion ?? Platform.Version}`;
-
-    const payload = {
-      type: 'EMERGENCY' as const,
-      category,
-      description: note.trim() || 'Emergency SOS alert — no additional details provided.',
-      gpsLat: gps.gpsLat,
-      gpsLng: gps.gpsLng,
-      gpsAccuracy: gps.gpsAccuracy,
-      deviceInfo,
+    const guardianLine = () => {
+      if (connectedGuardiansRef.current > 0) {
+        return { state: 'done' as const, detail: opts.queued ? 'Will alert when the SOS sends' : 'They get this emergency alert' };
+      }
+      if (pendingGuardiansRef.current > 0) {
+        return { state: 'warn' as const, detail: 'Invite waiting to be accepted' };
+      }
+      return { state: 'warn' as const, detail: 'No guardian connected — add one in Profile' };
     };
 
-    try {
-      const created = await createComplaint(payload);
-      setComplaintId(created.id);
-      successFeedback();
-      setSubmitted(true);
-    } catch (err: any) {
-      if (isNetworkError(err)) {
-        // No connection — keep the alert and send it the moment we're back online.
-        await queueSos(payload);
-        warningFeedback();
-        setQueuedOffline(true);
-        setSubmitted(true);
+    if (opts.queued) {
+      setAlertState('warn');
+      setCommitteeState('warn');
+      setCommitteeDetail(inOrgRef.current ? 'Will notify when you are back online' : 'No organization on file');
+      const g = guardianLine();
+      setGuardianState(g.state);
+      setGuardianDetail(g.detail);
+      warningFeedback();
+    } else {
+      setAlertState('done');
+      if (inOrgRef.current) {
+        setCommitteeState('done');
+        setCommitteeDetail('Safety team has your alert');
       } else {
-        setError(err?.response?.data?.message ?? 'Could not send the alert. Please try again.');
+        setCommitteeState('warn');
+        setCommitteeDetail('No organization — SOS goes to your guardian');
       }
-    } finally {
-      setSending(false);
+      const g = guardianLine();
+      setGuardianState(g.state);
+      setGuardianDetail(g.detail);
+      successFeedback();
+    }
+    setFinished(true);
+  }, []);
+
+  const runSend = useCallback(async () => {
+    setLocationState('pending');
+    setAlertState('pending');
+    setCommitteeState('pending');
+    setGuardianState('pending');
+    setError(null);
+    setFinished(false);
+    setQueuedOffline(false);
+    setComplaintId(null);
+
+    const [profile, guardians] = await Promise.all([
+      getMyProfile().catch(() => null),
+      listMyGuardians().catch(() => []),
+    ]);
+    const connected = guardians.filter((g) => g.status === 'ACCEPTED' || g.guardian).length;
+    applyContext(profile, connected, Math.max(0, guardians.length - connected));
+
+    const result = await sendEmergencySos((loc) => {
+      setLocationStatus(loc);
+      setLocationState(loc === 'active' ? 'done' : 'warn');
+    });
+    setLocationStatus(result.location);
+    setLocationState(result.location === 'active' ? 'done' : 'warn');
+
+    if (result.error) {
+      finishAlertRows({ queued: false, failed: true, error: result.error });
+      return;
+    }
+
+    setQueuedOffline(result.queuedOffline);
+    setComplaintId(result.complaintId);
+    finishAlertRows({ queued: result.queuedOffline, failed: false });
+  }, [applyContext, finishAlertRows]);
+
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    runSend();
+  }, [runSend]);
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (!finished) return true;
+      return false;
+    });
+    return () => sub.remove();
+  }, [finished]);
+
+  const handleRetry = async () => {
+    setRetrying(true);
+    started.current = true;
+    await runSend();
+    setRetrying(false);
+  };
+
+  const handleSafe = async () => {
+    if (!complaintId || safeMarked) return;
+    setSafeMarked(true);
+    successFeedback();
+    try {
+      await postMessage(complaintId, "I'm safe now.");
+    } catch {
+      setSafeMarked(false);
     }
   };
 
-  if (submitted) {
-    return (
-      <Screen padded isEmergency>
-        <View style={styles.successContent}>
-          <CheckCircle2 size={80} strokeWidth={1.5} color="#FFFFFF" />
-          <Text style={styles.successTitle}>{queuedOffline ? 'Alert saved' : 'Alert sent'}</Text>
-          <Text style={styles.successDesc}>
-            {queuedOffline
-              ? "You're offline right now. Your alert is saved and will send automatically the moment you have a connection."
-              : `Your organization's safety team has been notified${locationStatus === 'active' ? ' with your live location' : ''}.`}
-          </Text>
-          <Text style={styles.successInstruction}>
-            {queuedOffline
-              ? 'If you can, move to a place with signal or call for help directly.'
-              : "Stay where you are if it's safe, or move to a crowded public area."}
-          </Text>
+  const handleNote = async () => {
+    const body = note.trim();
+    if (!body || !complaintId || noteBusy || noteSaved) return;
+    setNoteBusy(true);
+    try {
+      await postMessage(complaintId, body);
+      setNoteSaved(true);
+      successFeedback();
+    } catch {
+      setError('Could not add your note. Try again.');
+    } finally {
+      setNoteBusy(false);
+    }
+  };
 
-          {!queuedOffline && complaintId && (
+  const title = !finished
+    ? 'Sending SOS'
+    : queuedOffline
+      ? 'Alert saved'
+      : error
+        ? 'Could not send'
+        : 'Help is on the way';
+
+  const subtitle = !finished
+    ? 'Stay on this screen. We are notifying people who can help.'
+    : queuedOffline
+      ? 'You are offline. The alert will send automatically when you have a connection.'
+      : error
+        ? error
+        : 'Stay where you are if it is safe, or move to a crowded public area.';
+
+  return (
+    <Screen padded isEmergency>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.scroll}
+        >
+          <View style={styles.hero}>
+            <View style={styles.heroIcon}>
+              {finished && !error ? (
+                <CheckCircle2 size={56} strokeWidth={1.6} color="#FFFFFF" />
+              ) : (
+                <ShieldAlert size={56} strokeWidth={1.6} color="#FFFFFF" />
+              )}
+            </View>
+            <Text style={styles.title}>{title}</Text>
+            <Text style={styles.subtitle}>{subtitle}</Text>
+          </View>
+
+          <View style={styles.card}>
+            <StatusRow
+              state={locationState}
+              label={locationState === 'pending' ? 'Getting your location' : locationStatus === 'active' ? 'Location attached' : 'Location unavailable'}
+              detail={locationStatus === 'denied' ? 'The alert still sends without GPS' : undefined}
+            />
+            <View style={styles.stepDivider} />
+            <StatusRow
+              state={alertState}
+              label={
+                alertState === 'pending'
+                  ? 'Sending alert'
+                  : queuedOffline
+                    ? 'Alert saved on this device'
+                    : alertState === 'fail'
+                      ? 'Alert did not send'
+                      : 'Alert sent'
+              }
+            />
+            <View style={styles.stepDivider} />
+            <StatusRow
+              state={committeeState}
+              label={committeeState === 'pending' ? 'Notifying committee' : 'Committee'}
+              detail={committeeDetail}
+            />
+            <View style={styles.stepDivider} />
+            <StatusRow
+              state={guardianState}
+              label={guardianState === 'pending' ? 'Notifying guardian' : 'Guardian'}
+              detail={guardianDetail}
+            />
+          </View>
+
+          {finished && complaintId && !noteSaved && (
+            <View style={styles.noteBlock}>
+              <Text style={styles.noteLabel}>Add a note (optional)</Text>
+              <TextInput
+                style={styles.noteInput}
+                placeholder="What is happening, where you are…"
+                placeholderTextColor="rgba(255,255,255,0.55)"
+                value={note}
+                onChangeText={setNote}
+                multiline
+              />
+              <Pressable
+                style={[styles.noteBtn, (!note.trim() || noteBusy) && styles.btnDisabled]}
+                onPress={handleNote}
+                disabled={!note.trim() || noteBusy}
+              >
+                <Text style={styles.noteBtnText}>{noteBusy ? 'Saving…' : 'Send note'}</Text>
+              </Pressable>
+            </View>
+          )}
+          {noteSaved && <Text style={styles.noteSaved}>Note added to your alert.</Text>}
+
+          {finished && complaintId && (
             <Pressable
               style={[styles.safeBtn, safeMarked && styles.safeBtnDone]}
               disabled={safeMarked}
-              onPress={async () => {
-                setSafeMarked(true);
-                successFeedback();
-                try {
-                  await postMessage(complaintId, "I'm safe now.");
-                } catch {
-                  setSafeMarked(false);
-                }
-              }}
+              onPress={handleSafe}
             >
               <Text style={styles.safeText}>
                 {safeMarked ? "The committee has been told you're safe" : "I'm safe now"}
@@ -131,139 +305,134 @@ export default function EmergencyScreen() {
             </Pressable>
           )}
 
-          <Pressable
-            style={styles.doneBtn}
-            onPress={() => router.replace('/(tabs)/home')}
-          >
-            <Text style={styles.doneText}>Return to home</Text>
-          </Pressable>
-        </View>
-      </Screen>
-    );
-  }
+          {finished && error && (
+            <Pressable style={styles.safeBtn} onPress={handleRetry} disabled={retrying}>
+              <Text style={styles.safeText}>{retrying ? 'Trying again…' : 'Try again'}</Text>
+            </Pressable>
+          )}
 
-  return (
-    <Screen padded>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.closeBtn}>
-            <Text style={styles.closeText}>Cancel</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.alertIconWrapper}>
-          <TriangleAlert size={48} strokeWidth={1.5} color="#FFFFFF" />
-        </View>
-
-        <Text style={styles.title}>Emergency alert</Text>
-        <Text style={styles.subtitle}>
-          This will instantly notify your organization's safety team with your location, if available.
-        </Text>
-
-        <View style={styles.dataCard}>
-          <Text style={styles.dataLabel}>What they will receive</Text>
-          <View style={styles.dataContent}>
-            <Row label="Identity" value={displayName || '—'} />
-            <View style={styles.divider} />
-            <Row label="Location" value="Requested when you send" valueHighlight />
-            <View style={styles.divider} />
-            <Row label="Device info" value={`${Device.modelName ?? Platform.OS} (${Device.osName ?? Platform.OS} ${Device.osVersion ?? Platform.Version})`} />
-          </View>
-        </View>
-
-        <View style={styles.categoryContainer}>
-          <Text style={styles.categoryLabel}>What is happening? (optional)</Text>
-          <View style={styles.chipsContainer}>
-            {CATEGORY_OPTIONS.map((c) => {
-              const active = c === category;
-              return (
-                <Pressable
-                  key={c}
-                  onPress={() => setCategory(c)}
-                  style={[styles.chip, active ? styles.chipActive : styles.chipInactive]}
-                >
-                  <Text style={[styles.chipText, active ? styles.chipTextActive : styles.chipTextInactive]}>
-                    {categoryLabel(c)}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
-        <View style={styles.noteContainer}>
-          <GlassInput
-            label="Additional context (optional)"
-            placeholder="Type quickly here..."
-            style={styles.textArea}
-            multiline
-            numberOfLines={2}
-            value={note}
-            onChangeText={setNote}
-          />
-        </View>
-
-        {error && <Text style={styles.error}>{error}</Text>}
-
-        <Pressable
-          style={[styles.sosButton, sending && styles.sosButtonDisabled]}
-          onPress={handleSend}
-          disabled={sending}
-        >
-          <LinearGradient colors={gradients.coral} locations={gradients.coralLocations} style={styles.sosGradient}>
-            <ShieldAlert size={20} strokeWidth={2.2} color="#FFFFFF" />
-            <Text style={styles.sosText}>{sending ? 'Sending…' : 'Send SOS now'}</Text>
-          </LinearGradient>
-        </Pressable>
-
-      </ScrollView>
+          {finished && (
+            <Pressable style={styles.doneBtn} onPress={() => router.replace('/(tabs)/home')}>
+              <Text style={styles.doneText}>Return to home</Text>
+            </Pressable>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </Screen>
   );
 }
 
-function Row({ label, value, valueHighlight }: { label: string; value: string; valueHighlight?: boolean }) {
-  return (
-    <View style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={[styles.rowValue, valueHighlight && styles.rowValueHighlight]}>{value}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  scrollContent: {
+  flex: { flex: 1 },
+  scroll: {
     paddingBottom: spacing.xxl,
-  },
-  successContent: {
-    flex: 1,
-    alignItems: 'center',
+    flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
   },
-  successTitle: {
+  hero: {
+    alignItems: 'center',
+    marginBottom: spacing.xxl,
+  },
+  heroIcon: {
+    marginBottom: spacing.lg,
+  },
+  title: {
     ...typography.h1,
     fontSize: 28,
     color: '#FFFFFF',
-    marginTop: spacing.xl,
-    marginBottom: spacing.sm,
-  },
-  successDesc: {
-    ...typography.body,
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.95)',
     textAlign: 'center',
-    lineHeight: 24,
   },
-  successInstruction: {
+  subtitle: {
     ...typography.body,
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 15,
+    color: 'rgba(255, 255, 255, 0.9)',
     textAlign: 'center',
     lineHeight: 22,
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  card: {
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.28)',
+    borderRadius: radius.card,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+  },
+  stepRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  stepIcon: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepText: {
+    flex: 1,
+  },
+  stepLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 15,
+    color: '#FFFFFF',
+  },
+  stepDetail: {
+    ...typography.caption,
+    color: 'rgba(255, 255, 255, 0.75)',
+    marginTop: 2,
+    lineHeight: 18,
+  },
+  stepDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+  },
+  noteBlock: {
+    marginTop: spacing.xl,
+  },
+  noteLabel: {
+    ...typography.caption,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginBottom: spacing.sm,
+  },
+  noteInput: {
+    minHeight: 72,
+    borderRadius: radius.input,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    color: '#FFFFFF',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    ...typography.body,
+    textAlignVertical: 'top',
+  },
+  noteBtn: {
+    marginTop: spacing.sm,
+    alignSelf: 'flex-end',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  noteBtnText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    color: '#FFFFFF',
+  },
+  noteSaved: {
+    ...typography.caption,
+    color: 'rgba(255, 255, 255, 0.85)',
     marginTop: spacing.lg,
+    textAlign: 'center',
+  },
+  btnDisabled: {
+    opacity: 0.45,
   },
   safeBtn: {
-    marginTop: 40,
+    marginTop: 28,
     borderWidth: 1.5,
     borderColor: '#FFFFFF',
     paddingVertical: 16,
@@ -293,166 +462,5 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     fontSize: 16,
     color: '#E0605C',
-  },
-
-  header: {
-    paddingVertical: spacing.md,
-    alignItems: 'flex-end',
-  },
-  closeBtn: {
-    padding: spacing.xs,
-  },
-  closeText: {
-    ...typography.body,
-    color: colors.mutedink,
-  },
-  alertIconWrapper: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: '#E0605C',
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    marginTop: spacing.xl,
-    marginBottom: spacing.lg,
-    shadowColor: '#E0605C',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.4,
-    shadowRadius: 24,
-    elevation: 16,
-  },
-  title: {
-    ...typography.h1,
-    fontSize: 26,
-    color: colors.ink,
-    textAlign: 'center',
-    marginBottom: spacing.sm,
-  },
-  subtitle: {
-    ...typography.body,
-    fontSize: 14,
-    color: colors.subink,
-    textAlign: 'center',
-    paddingHorizontal: spacing.lg,
-    lineHeight: 20,
-    marginBottom: spacing.xxl,
-  },
-  dataCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.4)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.6)',
-    borderRadius: 24,
-    paddingVertical: spacing.lg,
-    marginBottom: spacing.lg,
-  },
-  dataLabel: {
-    ...typography.h3,
-    color: colors.ink,
-    paddingHorizontal: spacing.xl,
-    marginBottom: spacing.sm,
-  },
-  dataContent: {
-    marginTop: spacing.xs,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: spacing.xl,
-    gap: spacing.md,
-  },
-  rowLabel: {
-    ...typography.caption,
-    color: colors.mutedink,
-  },
-  rowValue: {
-    ...typography.caption,
-    fontSize: 13,
-    color: colors.ink,
-    textAlign: 'right',
-    maxWidth: '65%',
-  },
-  rowValueHighlight: {
-    color: '#E0605C',
-    fontFamily: 'Inter_500Medium',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.5)',
-  },
-  categoryContainer: {
-    marginBottom: spacing.lg,
-  },
-  categoryLabel: {
-    ...typography.body,
-    fontSize: 14,
-    color: colors.subink,
-    marginBottom: spacing.sm,
-  },
-  chipsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: radius.pill,
-  },
-  chipActive: {
-    backgroundColor: '#FFFFFF',
-  },
-  chipInactive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.4)',
-  },
-  chipText: {
-    ...typography.caption,
-  },
-  chipTextActive: {
-    color: '#E0605C',
-    fontFamily: 'Inter_500Medium',
-  },
-  chipTextInactive: {
-    color: colors.subink,
-  },
-  noteContainer: {
-    marginBottom: spacing.xl,
-  },
-  textArea: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  error: {
-    ...typography.caption,
-    color: '#C0433E',
-    textAlign: 'center',
-    marginBottom: spacing.md,
-  },
-  sosButton: {
-    borderRadius: 20,
-    overflow: 'hidden',
-    shadowColor: '#E0605C',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.4,
-    shadowRadius: 24,
-    elevation: 16,
-    marginBottom: spacing.xxl,
-  },
-  sosButtonDisabled: {
-    opacity: 0.7,
-  },
-  sosGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 20,
-    gap: spacing.sm,
-  },
-  sosText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 18,
-    color: '#FFFFFF',
   },
 });

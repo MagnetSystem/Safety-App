@@ -12,10 +12,12 @@ import {
   Platform,
   Animated,
   Easing,
+  Share,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import * as Clipboard from 'expo-clipboard';
 import {
   HeartPulse,
   Edit2,
@@ -30,6 +32,8 @@ import {
   Shield,
   LogOut,
   ChevronRight,
+  Copy,
+  Share2,
 } from 'lucide-react-native';
 import { Screen } from '../../src/components/PhoneFrame';
 import { Glass, GlassInput } from '../../src/components/ui-kit';
@@ -102,9 +106,11 @@ const SCRAMBLE_LEN = 6;
 
 function InviteCodeCard({ generating, code }: { generating: boolean; code: string | null }) {
   const [shown, setShown] = useState('••••••');
+  const [copied, setCopied] = useState(false);
   const pulse = React.useRef(new Animated.Value(1)).current;
   const scale = React.useRef(new Animated.Value(1)).current;
   const wasGenerating = React.useRef(false);
+  const copiedTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   React.useEffect(() => {
     if (generating) {
@@ -144,6 +150,31 @@ function InviteCodeCard({ generating, code }: { generating: boolean; code: strin
 
   if (!generating && !code) return null;
 
+  const handleCopy = async () => {
+    if (!code || generating) return;
+    const ok = await Clipboard.setStringAsync(code);
+    if (Platform.OS !== 'web' || ok) {
+      setCopied(true);
+      successFeedback();
+      if (copiedTimer.current) clearTimeout(copiedTimer.current);
+      copiedTimer.current = setTimeout(() => setCopied(false), 2000);
+    } else {
+      Alert.alert('Could not copy', 'Use Share instead.');
+    }
+  };
+
+  const handleShare = async () => {
+    if (!code || generating) return;
+    const message = `Your Safety app guardian invite code is ${code}. Open the app → Profile → Guardian, then enter this code.`;
+    try {
+      await Share.share({ message, title: 'Guardian invite code' });
+    } catch {
+      await Clipboard.setStringAsync(code);
+      setCopied(true);
+      successFeedback();
+    }
+  };
+
   return (
     <Animated.View style={[styles.codeCard, { opacity: pulse, transform: [{ scale }] }]}>
       <Text style={styles.codeLabel}>
@@ -153,6 +184,18 @@ function InviteCodeCard({ generating, code }: { generating: boolean; code: strin
       <Text style={styles.codeHint}>
         {generating ? 'This only takes a moment…' : 'Your guardian enters this in their app'}
       </Text>
+      {!generating && code ? (
+        <View style={styles.codeActions}>
+          <Pressable style={styles.codeActionBtn} onPress={handleCopy}>
+            <Copy size={16} color={colors.indigoink} />
+            <Text style={styles.codeActionText}>{copied ? 'Copied' : 'Copy'}</Text>
+          </Pressable>
+          <Pressable style={styles.codeActionBtn} onPress={handleShare}>
+            <Share2 size={16} color={colors.indigoink} />
+            <Text style={styles.codeActionText}>Share</Text>
+          </Pressable>
+        </View>
+      ) : null}
     </Animated.View>
   );
 }
@@ -968,6 +1011,29 @@ const styles = StyleSheet.create({
     color: colors.mutedink,
     marginTop: spacing.sm,
     textAlign: 'center',
+  },
+  codeActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+    width: '100%',
+  },
+  codeActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: radius.input,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(15, 118, 110, 0.16)',
+  },
+  codeActionText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    color: colors.indigoink,
   },
   sectionLabel: {
     ...typography.caption,

@@ -46,7 +46,10 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
           <Pressable
             key={route.key}
             onPress={onPress}
-            style={styles.tabItem}
+            accessibilityRole="tab"
+            accessibilityLabel={options.tabBarAccessibilityLabel ?? label}
+            onLongPress={() => navigation.emit({ type: 'tabLongPress', target: route.key })}
+            style={({ pressed }) => [styles.tabItem, isFocused && styles.tabActive, pressed && { opacity: 0.65 }]}
             accessibilityState={isFocused ? { selected: true } : {}}
           >
             <Icon
@@ -81,7 +84,7 @@ const styles = StyleSheet.create({
     left: spacing.md,
     right: spacing.md,
     bottom: spacing.md,
-    backgroundColor: 'rgba(255, 255, 255, 0.60)',
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
     backdropFilter: 'blur(20px) saturate(150%)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.65)',
@@ -99,7 +102,7 @@ const styles = StyleSheet.create({
     left: spacing.md,
     right: spacing.md,
     bottom: spacing.md,
-    backgroundColor: 'rgba(255, 255, 255, 0.60)',
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.65)',
     borderRadius: radius.tabBar,
@@ -112,13 +115,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Platform.OS === 'web' ? 0 : spacing.md,
   },
+  tabActive: {
+    backgroundColor: colors.mintTint,
+  },
   tabItem: {
+    flex: 1,
+    minHeight: 52,
+    justifyContent: 'center',
+    borderRadius: 16,
+    paddingVertical: 6,
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.xs,
   },
   tabLabel: {
     ...typography.caption,
-    fontSize: 11,
+    fontSize: 12,
+    fontFamily: 'Inter_500Medium',
   },
 });

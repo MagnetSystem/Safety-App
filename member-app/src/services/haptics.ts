@@ -5,6 +5,10 @@ import * as Haptics from 'expo-haptics';
 // so guard here once rather than at every call site.
 const enabled = Platform.OS !== 'web';
 
+export function lightFeedback() {
+  if (enabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+}
+
 export function tapFeedback() {
   if (enabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
 }
