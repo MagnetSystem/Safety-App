@@ -1,9 +1,11 @@
+import QueryError from '../../components/QueryError';
+import Modal from '../../components/Modal';
 import { useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Search, X, Phone, Mail, Droplets, BookOpen, MapPin, Calendar } from "lucide-react";
 import { getMembers, resetMemberPassword } from "../../services/membersService";
 import type { Student } from "../../types/organization";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/auth";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { queryKeys } from "../../lib/queryKeys";
 import Pagination from "../../components/Pagination";
@@ -21,7 +23,7 @@ export default function Members() {
   const [resetTarget, setResetTarget] = useState<Student | null>(null);
   const [resetError, setResetError] = useState("");
   const [resetBusy, setResetBusy] = useState(false);
-  const { data, isLoading: loading, isError } = useQuery({
+  const { data, isLoading: loading, isError, refetch } = useQuery({
     queryKey: queryKeys.members.list({ search: debouncedQuery || undefined, page, pageSize: PAGE_SIZE }),
     queryFn: () => getMembers({ search: debouncedQuery || undefined, page, pageSize: PAGE_SIZE }),
     placeholderData: keepPreviousData,
@@ -31,7 +33,7 @@ export default function Members() {
   const error = isError ? "Could not load members." : "";
 
   const handleResetPassword = async (newPassword: string) => {
-    if (!resetTarget) return;
+    if (!resetTarget || resetBusy) return;
     setResetBusy(true);
     setResetError("");
     try {
@@ -45,11 +47,12 @@ export default function Members() {
   };
 
   return (
-    <div className="p-4 sm:p-6 space-y-5 max-w-[1400px] mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-semibold">Members</h1>
-          <p className="text-sm text-muted-foreground">View member profiles in your organization</p>
+    <div className="page-shell">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+        <div className="section-intro border-0 p-0">
+          <p className="page-overline">Organization</p>
+          <h1>People in your care.</h1>
+          <p>View member profiles in your organization.</p>
         </div>
         <div className="relative w-full sm:w-72">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -65,14 +68,10 @@ export default function Members() {
         </div>
       </div>
 
-      {error && (
-        <div className="px-3.5 py-2.5 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
-          {error}
-        </div>
-      )}
+      {error && <QueryError message={error} retry={refetch} />}
 
-      <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl overflow-hidden">
-        {loading ? (
+      <div className="surface-card overflow-hidden">
+        {isError && !data ? null : loading ? (
           <TableSkeleton />
         ) : students.length === 0 ? (
           <div className="py-16 text-center text-sm text-muted-foreground">No members found.</div>
@@ -95,7 +94,9 @@ export default function Members() {
               <tbody>
                 {students.map((s) => (
                   <tr 
-                    key={s.id} 
+                    key={s.id}
+                    tabIndex={0}
+                    onKeyDown={event => { if (event.key === "Enter") setSelectedStudent(s); }}
                     onClick={() => setSelectedStudent(s)}
                     className="border-b border-border last:border-0 hover:bg-muted/30 cursor-pointer"
                   >
@@ -128,8 +129,8 @@ export default function Members() {
       </div>
 
       {selectedStudent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in" onClick={() => setSelectedStudent(null)}>
-          <div className="bg-white w-full max-w-lg rounded-2xl border border-white/60 shadow-2xl overflow-hidden relative" onClick={e => e.stopPropagation()}>
+        <Modal label={selectedStudent.name} onClose={() => setSelectedStudent(null)} size="sm">
+          <div className="relative overflow-hidden">
             <button
               onClick={() => setSelectedStudent(null)}
               className="absolute top-4 right-4 p-1.5 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition"
@@ -213,7 +214,7 @@ export default function Members() {
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />

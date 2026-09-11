@@ -39,7 +39,7 @@ export default function ResetPassword() {
   };
 
   return (
-    <div className="rounded-2xl border border-border bg-card/70 backdrop-blur-2xl shadow-xl p-6 sm:p-8">
+    <div className="rounded-2xl border border-border bg-white p-6 sm:p-8 shadow-[0_1px_3px_rgb(15_23_42_/_0.04)]">
       <div className="mb-6">
         <div className="inline-flex items-center justify-center h-11 w-11 rounded-xl bg-primary/15 text-primary mb-3">
           <Lock size={20} />

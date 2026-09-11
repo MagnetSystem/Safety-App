@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Shield, Crown, Loader2 } from "lucide-react";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/auth";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -33,15 +33,15 @@ export default function Login() {
       } else {
         setError("This account is not authorized to access the admin portal.");
       }
-    } catch (err: any) {
-      setError(err?.response?.data?.message || "Invalid email or password. Please try again.");
+    } catch {
+      setError("Invalid email or password. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="rounded-2xl border border-border bg-card/70 backdrop-blur-2xl shadow-xl p-6 sm:p-8 animate-fade-in">
+    <div className="rounded-2xl border border-border bg-white p-6 sm:p-8 shadow-[0_1px_3px_rgb(15_23_42_/_0.04)]">
       {/* Role Toggle */}
       <div className="flex p-1 bg-muted rounded-lg mb-8">
         <button

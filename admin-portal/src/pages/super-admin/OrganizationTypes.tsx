@@ -1,3 +1,5 @@
+import QueryError from '../../components/QueryError';
+import Modal from '../../components/Modal';
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Loader2, Plus, ToggleLeft, ToggleRight } from "lucide-react";
@@ -37,6 +39,14 @@ function slugKey(label: string) {
 export default function OrganizationTypes() {
   const queryClient = useQueryClient();
   const [actionError, setActionError] = useState("");
+  const [actionBusy, setActionBusy] = useState(false);
+  const runAction = async (action: () => Promise<unknown>) => {
+    if (actionBusy) return;
+    setActionBusy(true); setActionError("");
+    try { await action(); invalidateTypes(); }
+    catch { setActionError("Unable to update organization type. Please try again."); }
+    finally { setActionBusy(false); }
+  };
   const [wizard, setWizard] = useState(false);
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<UpsertOrganizationType>(emptyDraft());
@@ -46,7 +56,7 @@ export default function OrganizationTypes() {
   const [catLabel, setCatLabel] = useState("");
   const [deptName, setDeptName] = useState("");
 
-  const { data: rows = [], isLoading: loading, isError } = useQuery({
+  const { data: rows = [], isLoading: loading, isError, refetch } = useQuery({
     queryKey: queryKeys.organizationTypes.all,
     queryFn: listOrganizationTypes,
   });
@@ -99,13 +109,14 @@ export default function OrganizationTypes() {
       setStep(0);
       invalidateTypes();
     },
-    onError: (err: any) => {
-      setActionError(err?.response?.data?.message ?? "Could not save this type.");
+    onError: () => {
+      setActionError("Could not save this type.");
     },
   });
   const saving = createMutation.isPending;
 
   const submit = async () => {
+    if (saving || !canCreate) return;
     setActionError("");
     createMutation.mutate(draft);
   };
@@ -115,10 +126,10 @@ export default function OrganizationTypes() {
   return (
     <div className="page-shell">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">Support</p>
-          <h1 className="text-2xl font-semibold tracking-tight mt-1">Organization types</h1>
-          <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
+        <div className="section-intro border-0 p-0">
+          <p className="page-overline">Support</p>
+          <h1>Organization types</h1>
+          <p>
             When a client is not Education, Corporate or Care, sit with them, capture the fields they actually need, and publish a type.
             It appears on signup immediately so they can onboard without a rebuild.
           </p>
@@ -131,10 +142,10 @@ export default function OrganizationTypes() {
         </button>
       </div>
 
-      {error && <div className="px-4 py-3 rounded-xl bg-red-50 text-red-700 text-sm">{error}</div>}
+      {error && <QueryError message={error} retry={refetch} />}
 
       <div className="surface-card overflow-hidden">
-        {loading ? (
+        {isError ? null : loading ? (
           <div className="py-16 flex justify-center"><Loader2 className="animate-spin text-teal-700" /></div>
         ) : (
           <table className="w-full text-sm">
@@ -166,8 +177,7 @@ export default function OrganizationTypes() {
                       onClick={async () => {
                         const label = window.prompt("Name for the copy", `${row.label} (copy)`);
                         if (!label) return;
-                        await duplicateOrganizationType(row.dbId, label);
-                        invalidateTypes();
+                        await runAction(() => duplicateOrganizationType(row.dbId, label));
                       }}
                       className="text-xs text-slate-500 hover:text-teal-700 inline-flex items-center gap-1"
                     >
@@ -176,8 +186,7 @@ export default function OrganizationTypes() {
                     {!row.isSystem && (
                       <button
                         onClick={async () => {
-                          await setOrganizationTypeActive(row.dbId, !row.isActive);
-                          invalidateTypes();
+                          await runAction(() => setOrganizationTypeActive(row.dbId, !row.isActive));
                         }}
                         className="text-xs text-slate-500 hover:text-teal-700 inline-flex items-center gap-1"
                       >
@@ -194,8 +203,8 @@ export default function OrganizationTypes() {
       </div>
 
       {wizard && (
-        <div className="fixed inset-0 z-50 bg-slate-950/40 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto p-6">
+        <Modal label="Create organization type" onClose={() => { if (!saving) setWizard(false); }} busy={saving}>
+          <div className="p-6">
             <div className="flex justify-between items-start mb-4">
               <div>
                 <p className="text-xs uppercase tracking-wide text-teal-700 font-semibold">Create type</p>
@@ -311,7 +320,7 @@ export default function OrganizationTypes() {
               )}
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

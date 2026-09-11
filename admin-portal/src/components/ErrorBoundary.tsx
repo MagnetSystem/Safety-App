@@ -1,3 +1,4 @@
+import { clearAuth } from "../lib/authStorage";
 import { Component, type ErrorInfo, type ReactNode } from "react";
 
 interface Props {
@@ -16,7 +17,7 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("Admin portal crashed", error, info.componentStack);
+    if (import.meta.env.DEV) console.error("Admin portal crashed", error.name, info.componentStack);
   }
 
   render() {
@@ -40,6 +41,7 @@ export default class ErrorBoundary extends Component<Props, State> {
             <button
               type="button"
               onClick={() => {
+                clearAuth();
                 this.setState({ error: null });
                 window.location.href = "/login";
               }}

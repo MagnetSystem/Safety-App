@@ -1,9 +1,10 @@
+import QueryError from '../../components/QueryError';
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Search as SearchIcon, Loader2 } from "lucide-react";
 import { search as runSearch } from "../../services/searchService";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/auth";
 import { formatEnum } from "../../types/report";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { queryKeys } from "../../lib/queryKeys";
@@ -16,24 +17,25 @@ export default function SearchPage() {
   const liveQuery = query.trim();
   const debouncedQuery = useDebouncedValue(liveQuery, 300);
   const canSearch = debouncedQuery.length >= 2;
-  const { data, isFetching } = useQuery({
+  const { data, isFetching, isError, refetch } = useQuery({
     queryKey: queryKeys.search(debouncedQuery),
     queryFn: () => runSearch(debouncedQuery),
     enabled: canSearch,
   });
   const loading = liveQuery.length >= 2 && liveQuery === debouncedQuery && isFetching;
-  const results = liveQuery.length < 2 || loading ? undefined : data;
+  const results = liveQuery.length < 2 || liveQuery !== debouncedQuery || loading ? undefined : data;
 
   const reportsBase = role === "support" ? "/super-admin" : "";
 
   return (
-    <div className="p-4 sm:p-6 max-w-[900px] mx-auto space-y-6">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-semibold">Search</h1>
-        <p className="text-sm text-muted-foreground">
+    <div className="page-shell max-w-[900px]">
+      <div className="section-intro">
+        <p className="page-overline">Find</p>
+        <h1>Search people and cases.</h1>
+        <p>
           {role === "support"
-            ? "Search members and cases across the entire platform"
-            : "Search members and cases within your organization"}
+            ? "Look across the entire platform by name, report code, or email."
+            : "Look within your organization by name, report code, or email."}
         </p>
       </div>
 
@@ -43,11 +45,13 @@ export default function SearchPage() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Name, roll number, report code, email..."
-          className="w-full pl-12 pr-4 py-3.5 rounded-xl bg-card border border-border text-base focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="w-full rounded-xl border border-border bg-white py-3.5 pl-12 pr-4 text-base"
           autoFocus
         />
       </div>
 
+      {isError && <QueryError message="Unable to search. Please try again." retry={refetch} />}
+      {liveQuery.length < 2 && <p className="text-sm text-slate-500">Enter at least two characters to search.</p>}
       {loading && (
         <div className="flex items-center justify-center py-8 text-muted-foreground">
           <Loader2 className="animate-spin mr-2" size={18} /> Searching…
@@ -56,7 +60,7 @@ export default function SearchPage() {
 
       {!loading && results && (
         <div className="space-y-4">
-          <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl p-4">
+          <div className="surface-card p-4">
             <h3 className="text-sm font-medium text-muted-foreground mb-3">
               Members {results.students.length > 0 && `(${results.students.length})`}
             </h3>
@@ -78,7 +82,7 @@ export default function SearchPage() {
             )}
           </div>
 
-          <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl p-4">
+          <div className="surface-card p-4">
             <h3 className="text-sm font-medium text-muted-foreground mb-3">
               Cases {results.complaints.length > 0 && `(${results.complaints.length})`}
             </h3>
@@ -105,7 +109,7 @@ export default function SearchPage() {
           </div>
 
           {role === "support" && (
-            <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl p-4">
+            <div className="surface-card p-4">
               <h3 className="text-sm font-medium text-muted-foreground mb-3">
                 Organizations {results.colleges.length > 0 && `(${results.colleges.length})`}
               </h3>

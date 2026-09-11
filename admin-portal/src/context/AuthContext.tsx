@@ -1,157 +1,101 @@
-import { createContext, useContext, useEffect, useState } from 'react';
-import type { ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { loginUser, getMe } from '../services/authService';
-import { clearAuth, inferRemember, readAuth, writeAuth, writeUser } from '../lib/authStorage';
-import { resolveOrgAppRole, toAppRole, type Role, type User } from '../types/user';
+import { loginUser, getMe, type MeResponse } from '../services/authService';
+import { clearAuth, inferRemember, readAuth, writeAuth } from '../lib/authStorage';
+import { resolveOrgAppRole, type User } from '../types/user';
+import { AuthContext, type AuthContextType } from './auth';
 
-interface AuthContextType {
-  user: User | null;
-  role: Role;
-  isAuthenticated: boolean;
-  login: (email: string, password: string, remember?: boolean) => Promise<Role>;
-  logout: () => void;
-  applySession: (tokens: { accessToken: string; refreshToken: string; user: { id: string; email: string; role: string; organizationId?: string | null; collegeId?: string | null } }, extras?: Partial<User>, remember?: boolean) => Promise<void>;
-  updateLocalUser: (patch: Partial<User>) => void;
+function userFromMe(me: MeResponse): User {
+  const role = resolveOrgAppRole(me.role, me.orgStaff?.orgRole);
+  if (!role || !me.isActive) throw new Error('This account cannot access the portal.');
+  const organizationId = me.orgStaff?.organization?.id ?? null;
+  const organizationName = me.orgStaff?.organization?.name ?? null;
+  return { id: me.id, email: me.email, role,
+    name: me.orgStaff?.name ?? (role === 'support' ? 'Support' : me.email.split('@')[0]),
+    organizationId, organizationName, collegeId: organizationId, collegeName: organizationName };
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-function loadStoredUser(): User | null {
-  const saved = readAuth('safety_user');
-  if (!saved) return null;
-  try {
-    const parsed = JSON.parse(saved) as User;
-    parsed.role = toAppRole(parsed.role) ?? parsed.role;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function persist(user: User | null) {
-  if (user) writeUser(JSON.stringify(user));
-  else clearAuth();
-}
-
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
-  const [user, setUser] = useState<User | null>(loadStoredUser);
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setLoading] = useState(!!readAuth('accessToken'));
+  const [sessionError, setSessionError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const generation = useRef(0);
 
-  const isAuthenticated = !!user && !!user.role;
-
-  const applySession: AuthContextType['applySession'] = async (tokens, extras = {}, remember = inferRemember()) => {
-    writeAuth(
-      { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken },
-      remember,
-    );
-    queryClient.clear();
-    let appRole = toAppRole(tokens.user.role);
-    let name = extras.name ?? user?.name ?? tokens.user.email.split('@')[0];
-    let organizationName = extras.organizationName ?? null;
-    let organizationId = tokens.user.organizationId ?? tokens.user.collegeId ?? extras.organizationId ?? null;
-    try {
-      const me = await getMe();
-      appRole = resolveOrgAppRole(me.role, me.orgStaff?.orgRole) ?? appRole;
-      if (me.orgStaff) {
-        name = me.orgStaff.name;
-        organizationName = me.orgStaff.organization?.name ?? organizationName;
-        organizationId = me.orgStaff.organization?.id ?? organizationId;
-      } else if (appRole === 'support') {
-        name = extras.name ?? user?.name ?? 'Support';
-      }
-    } catch {
-      // keep derived name
-    }
-    const next: User = {
-      id: tokens.user.id,
-      email: tokens.user.email,
-      name,
-      role: appRole,
-      organizationId,
-      organizationName,
-      collegeId: organizationId,
-      collegeName: organizationName,
-    };
-    setUser(next);
-    persist(next);
-  };
-
-  const login = async (email: string, password: string, remember = true): Promise<Role> => {
-    const result = await loginUser(email, password);
-    await applySession(result, {}, remember);
-    const saved = loadStoredUser();
-    return saved?.role ?? null;
-  };
-
-  const logout = () => {
+  const logout = useCallback(() => {
+    generation.current++;
+    clearAuth();
     queryClient.clear();
     setUser(null);
-    persist(null);
-  };
-
-  const updateLocalUser = (patch: Partial<User>) => {
-    setUser((prev) => {
-      if (!prev) return prev;
-      const next = { ...prev, ...patch };
-      persist(next);
-      return next;
-    });
-  };
+    setLoading(false);
+    setSessionError(false);
+  }, [queryClient]);
 
   useEffect(() => {
-    if (!readAuth('accessToken')) return;
+    const expire = () => logout();
+    const sync = (event: StorageEvent) => {
+      if (event.key === 'accessToken' || event.key === null) {
+        generation.current++;
+        queryClient.clear();
+        setUser(null);
+        setLoading(!!readAuth('accessToken'));
+        setAttempt(value => value + 1);
+      }
+    };
+    window.addEventListener('safety:session-expired', expire);
+    window.addEventListener('storage', sync);
+    return () => {
+      window.removeEventListener('safety:session-expired', expire);
+      window.removeEventListener('storage', sync);
+    };
+  }, [logout, queryClient]);
+
+  useEffect(() => {
+    if (!readAuth('accessToken')) { setLoading(false); return; }
     let cancelled = false;
-    getMe()
-      .then((me) => {
-        if (cancelled) return;
-        const appRole = resolveOrgAppRole(me.role, me.orgStaff?.orgRole);
-        if (!appRole) return;
-        setUser((prev) => {
-          if (!prev) return prev;
-          const name = me.orgStaff?.name ?? prev.name;
-          const organizationName = me.orgStaff?.organization?.name ?? prev.organizationName;
-          const organizationId = me.orgStaff?.organization?.id ?? prev.organizationId;
-          if (
-            prev.role === appRole &&
-            prev.name === name &&
-            prev.organizationName === organizationName &&
-            prev.organizationId === organizationId
-          ) {
-            return prev;
-          }
-          const next: User = {
-            ...prev,
-            role: appRole,
-            name,
-            organizationName,
-            organizationId,
-            collegeId: organizationId,
-            collegeName: organizationName,
-          };
-          persist(next);
-          return next;
-        });
+    const current = generation.current;
+    setLoading(true);
+    setSessionError(false);
+    queryClient.fetchQuery({ queryKey: ['session'], queryFn: getMe, staleTime: 0, retry: false })
+      .then(me => {
+        if (!cancelled && current === generation.current) setUser(userFromMe(me));
       })
       .catch(() => {
-        // Keep the stored session; a 401 interceptor already sends the user to login.
+        if (!cancelled && current === generation.current) setSessionError(!!readAuth('accessToken'));
+      })
+      .finally(() => {
+        if (!cancelled && current === generation.current) setLoading(false);
       });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    return () => { cancelled = true; };
+  }, [attempt, queryClient]);
 
-  return (
-    <AuthContext.Provider value={{ user, role: user?.role ?? null, isAuthenticated, login, logout, applySession, updateLocalUser }}>
-      {children}
-    </AuthContext.Provider>
-  );
-};
+  const applySession: AuthContextType['applySession'] = async (tokens, extras = {}, remember = inferRemember()) => {
+    const current = ++generation.current;
+    queryClient.clear();
+    writeAuth({ accessToken: tokens.accessToken, refreshToken: tokens.refreshToken }, remember);
+    try {
+      const next = userFromMe(await getMe());
+      if (next.role === 'support' && extras.name) next.name = extras.name;
+      if (current !== generation.current) throw new Error('Session changed.');
+      setUser(next);
+      setSessionError(false);
+      setLoading(false);
+    } catch (error) {
+      if (current === generation.current) logout();
+      throw error;
+    }
+  };
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
+  const login: AuthContextType['login'] = async (email, password, remember = true) => {
+    const result = await loginUser(email.trim(), password);
+    await applySession(result, {}, remember);
+    return resolveOrgAppRole(result.user.role);
+  };
+
+  return <AuthContext.Provider value={{
+    user, role: user?.role ?? null, isAuthenticated: !!user, isLoading, sessionError,
+    retrySession: () => setAttempt(value => value + 1), login, logout, applySession,
+    updateLocalUser: patch => setUser(previous => previous ? { ...previous, ...patch } : null),
+  }}>{children}</AuthContext.Provider>;
+}

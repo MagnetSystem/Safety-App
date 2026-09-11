@@ -1,3 +1,6 @@
+import QueryError from '../../components/QueryError';
+import Pagination from '../../components/Pagination';
+import Modal from '../../components/Modal';
 import { useEffect, useState } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Search, Plus, Building2, Loader2, X, KeyRound } from "lucide-react";
@@ -14,7 +17,7 @@ import { onboardClient } from "../../services/organizationTypesService";
 import type { Organization } from "../../types/organization";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 import { queryKeys } from "../../lib/queryKeys";
-import type { Paginated } from "../../types/report";
+
 
 type OrgDetail = Organization & {
   joinCode?: string;
@@ -32,6 +35,8 @@ const EMPTY_FORM: CreateOrganizationInput & { ownerName: string; ownerEmail: str
 
 export default function Organizations() {
   const queryClient = useQueryClient();
+  const [page, setPage] = useState(1);
+  const [statusBusy, setStatusBusy] = useState(false);
   const [filter, setFilter] = useState("All");
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 300);
@@ -49,10 +54,10 @@ export default function Organizations() {
   const [resetMessage, setResetMessage] = useState("");
   const [resetError, setResetError] = useState("");
 
-  const listKey = queryKeys.organizations.list({ search: debouncedSearch || undefined, pageSize: 100 });
-  const { data, isLoading: loading, isError } = useQuery({
+  const listKey = queryKeys.organizations.list({ search: debouncedSearch || undefined, page, pageSize: 20 });
+  const { data, isLoading: loading, isError, refetch } = useQuery({
     queryKey: listKey,
-    queryFn: () => getOrganizations({ search: debouncedSearch || undefined, pageSize: 100 }),
+    queryFn: () => getOrganizations({ search: debouncedSearch || undefined, page, pageSize: 20 }),
     placeholderData: keepPreviousData,
   });
   const colleges = Array.isArray(data?.items) ? data.items : [];
@@ -86,6 +91,7 @@ export default function Organizations() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     setFormError("");
     setSubmitting(true);
     try {
@@ -110,27 +116,29 @@ export default function Organizations() {
         setForm(EMPTY_FORM);
       }
       queryClient.invalidateQueries({ queryKey: queryKeys.organizations.all });
-    } catch (err: any) {
-      setFormError(err?.response?.data?.message || "Could not create organization.");
+    } catch {
+      setFormError("Could not create organization.");
     } finally {
       setSubmitting(false);
     }
   };
 
   const toggleStatus = async (c: Organization) => {
+    if (statusBusy) return;
+    if (c.status === "ACTIVE" && !window.confirm("Suspend this organization's access?")) return;
+    setStatusBusy(true);
+    setActionError("");
     const next = c.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
-    queryClient.setQueryData<Paginated<Organization>>(listKey, (old) =>
-      old ? { ...old, items: old.items.map((x) => (x.id === c.id ? { ...x, status: next } : x)) } : old,
-    );
-    if (listPreview?.id === c.id) setListPreview({ ...listPreview, status: next });
-    queryClient.setQueryData(queryKeys.organizations.detail(c.id), (old: OrgDetail | undefined) =>
-      old ? { ...old, status: next } : old,
-    );
     try {
-      await updateOrganizationStatus(c.id, next);
+      const updated = await updateOrganizationStatus(c.id, next);
+      if (listPreview?.id === c.id) setListPreview({ ...listPreview, status: updated.status });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.organizations.all });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.organizations.detail(c.id) });
     } catch {
+      setActionError("Could not update organization status. Please try again.");
       queryClient.invalidateQueries({ queryKey: queryKeys.organizations.all });
-    }
+      queryClient.invalidateQueries({ queryKey: queryKeys.organizations.detail(c.id) });
+    } finally { setStatusBusy(false); }
   };
 
   const openDetail = (c: Organization) => {
@@ -143,7 +151,7 @@ export default function Organizations() {
   };
 
   const handleResetOwnerPassword = async () => {
-    if (!detail) return;
+    if (!detail || resetBusy) return;
     setResetError("");
     setResetMessage("");
     if (ownerPassword.length < 8) {
@@ -155,8 +163,8 @@ export default function Organizations() {
       const result = await resetOwnerPassword(detail.id, ownerPassword);
       setOwnerPassword("");
       setResetMessage(`Owner password updated${result.ownerEmail ? ` for ${result.ownerEmail}` : ""}. This is logged.`);
-    } catch (err: any) {
-      setResetError(err?.response?.data?.message || "Could not reset owner password.");
+    } catch {
+      setResetError("Could not reset owner password.");
     } finally {
       setResetBusy(false);
     }
@@ -165,11 +173,12 @@ export default function Organizations() {
   const filtered = colleges.filter((c) => filter === "All" || c.status === filter.toUpperCase());
 
   return (
-    <div className="p-4 sm:p-6 space-y-5 max-w-[1400px] mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-semibold">Organizations</h1>
-          <p className="text-sm text-muted-foreground">Onboard a client: pick (or create) a type, then create the org and owner in one step</p>
+    <div className="page-shell">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+        <div className="section-intro border-0 p-0">
+          <p className="page-overline">Platform</p>
+          <h1>Every tenant, one workspace.</h1>
+          <p>Onboard a client: pick or create a type, then create the organization and owner in one step.</p>
         </div>
         <button
           onClick={() => { setJoinResult(null); setShowForm(true); }}
@@ -179,7 +188,7 @@ export default function Organizations() {
         </button>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="filter-strip">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
@@ -189,7 +198,7 @@ export default function Organizations() {
             autoCorrect="off"
             spellCheck={false}
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             placeholder="Search organizations..."
             className="w-full pl-9 pr-4 py-2 rounded-lg bg-card border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
@@ -210,15 +219,11 @@ export default function Organizations() {
         </div>
       </div>
 
-      {error && (
-        <div className="px-3.5 py-2.5 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
-          {error}
-        </div>
-      )}
+      {error && <QueryError message={error} retry={refetch} />}
 
       <div className={`grid gap-5 items-start ${detail ? "xl:grid-cols-[minmax(0,1fr)_24rem]" : ""}`}>
-      <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl overflow-hidden min-w-0">
-        {loading ? (
+      <div className="surface-card min-w-0 overflow-hidden">
+        {isError && !data ? null : loading ? (
           <div className="flex items-center justify-center py-16 text-muted-foreground">
             <Loader2 className="animate-spin mr-2" size={18} /> Loading organizations…
           </div>
@@ -274,7 +279,8 @@ export default function Organizations() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => toggleStatus(c)}
+                          disabled={statusBusy}
+                      onClick={() => toggleStatus(c)}
                           className={`text-xs font-medium px-2.5 py-1 rounded-lg border ${
                             c.status === "ACTIVE"
                               ? "border-destructive/30 text-destructive hover:bg-destructive/10"
@@ -293,6 +299,7 @@ export default function Organizations() {
         )}
       </div>
 
+      <Pagination page={page} pageSize={20} total={data?.total ?? 0} onPageChange={setPage} />
       {detail && (
         <aside className="rounded-xl border border-border bg-card shadow-sm p-6 space-y-5 xl:sticky xl:top-4">
           <div className="flex items-start justify-between gap-3">
@@ -396,10 +403,10 @@ export default function Organizations() {
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
+        <Modal label="Onboard client" onClose={() => { if (!submitting) setShowForm(false); }} busy={submitting} size="sm">
           <form
             onSubmit={handleCreate}
-            className="w-full max-w-lg rounded-2xl bg-card border border-border shadow-xl p-6 space-y-4"
+            className="p-6 space-y-4"
           >
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Onboard client</h2>
@@ -454,7 +461,7 @@ export default function Organizations() {
               {submitting ? "Creating…" : "Create organization + owner"}
             </button>
           </form>
-        </div>
+        </Modal>
       )}
     </div>
   );

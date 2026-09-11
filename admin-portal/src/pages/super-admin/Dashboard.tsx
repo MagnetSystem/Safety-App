@@ -1,3 +1,5 @@
+import QueryError from '../../components/QueryError';
+import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Building2, Users, UserCog, FileText,
@@ -8,7 +10,7 @@ import { formatEnum } from "../../types/report";
 import { queryKeys } from "../../lib/queryKeys";
 
 export default function SuperAdminDashboard() {
-  const { data, isLoading: loading, isError } = useQuery({
+  const { data, isLoading: loading, isError, refetch } = useQuery({
     queryKey: queryKeys.superAdminDashboard,
     queryFn: getSuperAdminDashboard,
   });
@@ -18,24 +20,19 @@ export default function SuperAdminDashboard() {
   const maxMonth = Math.max(1, ...(data?.byMonth.map((m) => m.count) ?? [1]));
   const resolveRate =
     data && data.totalReports > 0 ? ((data.resolvedReports / data.totalReports) * 100).toFixed(1) : "0.0";
-  const topColleges = [...(data?.byCollege ?? [])].sort((a, b) => b.count - a.count).slice(0, 5);
+  const topColleges = [...(data?.byOrganization?.map(x => ({ collegeId: x.organizationId, college: x.organization, count: x.count })) ?? data?.byCollege ?? [])].sort((a, b) => b.count - a.count).slice(0, 5);
 
   return (
-    <div className="p-4 sm:p-6 space-y-6 max-w-[1400px] mx-auto">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-semibold text-foreground">Platform Dashboard</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Overview across all organizations
-        </p>
+    <div className="page-shell">
+      <div className="section-intro">
+        <p className="page-overline">Platform</p>
+        <h1>Every organization, one view.</h1>
+        <p>A calm snapshot across tenants so support can see volume, emergencies, and resolution rate.</p>
       </div>
 
-      {error && (
-        <div className="px-3.5 py-2.5 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
-          {error}
-        </div>
-      )}
+      {error && <QueryError message={error} retry={refetch} />}
 
-      {loading ? (
+      {isError && !data ? null : loading ? (
         <div className="flex items-center justify-center py-24 text-muted-foreground">
           <Loader2 className="animate-spin mr-2" size={18} /> Loading dashboard…
         </div>
@@ -54,7 +51,7 @@ export default function SuperAdminDashboard() {
           {/* Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* State-wise */}
-            <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl p-5">
+            <div className="surface-card p-5">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-medium">Reports by State</h3>
                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
@@ -76,7 +73,7 @@ export default function SuperAdminDashboard() {
             </div>
 
             {/* Monthly */}
-            <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl p-5">
+            <div className="surface-card p-5">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-medium">Monthly Reports</h3>
                 <span className="text-xs text-muted-foreground">Last 12 months</span>
@@ -84,7 +81,7 @@ export default function SuperAdminDashboard() {
               <div className="flex items-end gap-2 h-44">
                 {(data?.byMonth ?? []).length === 0 && <p className="text-sm text-muted-foreground">No data yet</p>}
                 {[...(data?.byMonth ?? [])].reverse().map((i) => (
-                  <div key={i.month} className="flex-1 flex flex-col items-center gap-1">
+                  <div key={i.month} className="flex-1 h-full flex flex-col justify-end items-center gap-1">
                     <div
                       className="w-full rounded-t-md bg-primary/70 hover:bg-primary transition"
                       style={{ height: `${(i.count / maxMonth) * 100}%` }}
@@ -98,7 +95,7 @@ export default function SuperAdminDashboard() {
 
           {/* Top Colleges + Category */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl p-5">
+            <div className="surface-card p-5">
               <h3 className="font-medium mb-4">Top organizations by cases</h3>
               <div className="space-y-3">
                 {topColleges.length === 0 && <p className="text-sm text-muted-foreground">No data yet</p>}
@@ -114,7 +111,7 @@ export default function SuperAdminDashboard() {
               </div>
             </div>
 
-            <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl p-5">
+            <div className="surface-card p-5">
               <h3 className="font-medium mb-4">Reports by Category</h3>
               <div className="space-y-3">
                 {(data?.byCategory ?? []).length === 0 && <p className="text-sm text-muted-foreground">No data yet</p>}
@@ -133,14 +130,14 @@ export default function SuperAdminDashboard() {
   );
 }
 
-function StatCard({ title, value, icon, trend, variant = "default" }: any) {
-  const colorMap: any = {
+function StatCard({ title, value, icon, trend, variant = "default" }: { title: string; value: number; icon: ReactNode; trend?: string; variant?: string }) {
+  const colorMap: Record<string, string> = {
     default: "text-primary",
     destructive: "text-destructive",
     success: "text-success",
   };
   return (
-    <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl p-4">
+    <div className="surface-card p-4">
       <div className="flex justify-between items-start">
         <div>
           <p className="text-xs sm:text-sm text-muted-foreground">{title}</p>

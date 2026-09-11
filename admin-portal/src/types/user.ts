@@ -41,6 +41,7 @@ export function resolveOrgAppRole(
 ): Exclude<Role, null> | null {
   const fromUser = toAppRole(userRole);
   const fromOrg = toAppRole(orgRole);
+  if (fromUser === 'support') return 'support';
   if (fromUser && fromOrg) {
     return (ORG_RANK[fromOrg] ?? 0) >= (ORG_RANK[fromUser] ?? 0) ? fromOrg : fromUser;
   }

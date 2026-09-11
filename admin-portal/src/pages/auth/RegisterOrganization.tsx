@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { registerOrganization } from "../../services/authService";
 import { getIndustryCatalog, type IndustryCatalog } from "../../services/departmentsService";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/auth";
 import { queryKeys } from "../../lib/queryKeys";
 
 const STEPS = [
@@ -210,15 +210,15 @@ export default function RegisterOrganization() {
       });
       setStep(3);
       setTimeout(() => navigate("/onboarding"), 1600);
-    } catch (err: any) {
-      setError(err?.response?.data?.message ?? "Could not create the organization. Please try again.");
+    } catch {
+      setError("Could not create the organization. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="rounded-2xl border border-border bg-card/70 backdrop-blur-2xl shadow-xl p-6 sm:p-8 animate-fade-in">
+    <div className="rounded-2xl border border-border bg-white p-6 sm:p-8 shadow-[0_1px_3px_rgb(15_23_42_/_0.04)]">
       <div className="text-center mb-6">
         <div className="inline-flex items-center justify-center h-12 w-12 rounded-xl bg-primary/15 text-primary mb-3">
           <Building2 size={24} />

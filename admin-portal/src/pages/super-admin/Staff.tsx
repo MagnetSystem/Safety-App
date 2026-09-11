@@ -1,3 +1,4 @@
+import Modal from '../../components/Modal';
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Search, Plus, Loader2, X } from "lucide-react";
@@ -40,8 +41,8 @@ export default function Staff() {
       setForm(EMPTY_FORM);
       queryClient.invalidateQueries({ queryKey: queryKeys.staff.all });
     },
-    onError: (err: any) => {
-      setFormError(err?.response?.data?.message || "Could not create staff account.");
+    onError: () => {
+      setFormError("Could not create staff account.");
     },
   });
   const submitting = createMutation.isPending;
@@ -102,11 +103,12 @@ export default function Staff() {
   });
 
   return (
-    <div className="p-4 sm:p-6 space-y-5 max-w-[1400px] mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-semibold">Staff</h1>
-          <p className="text-sm text-muted-foreground">Manage owner, admin and staff accounts</p>
+    <div className="page-shell">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+        <div className="section-intro border-0 p-0">
+          <p className="page-overline">Platform</p>
+          <h1>Staff accounts</h1>
+          <p>Manage owner, admin and staff accounts across organizations.</p>
         </div>
         <button
           onClick={() => setShowForm(true)}
@@ -132,7 +134,7 @@ export default function Staff() {
         </div>
       )}
 
-      <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl overflow-hidden">
+      <div className="surface-card overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-16 text-muted-foreground">
             <Loader2 className="animate-spin mr-2" size={18} /> Loading admins…
@@ -191,10 +193,10 @@ export default function Staff() {
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
+        <Modal label="Add admin" onClose={() => { if (!submitting) setShowForm(false); }} busy={submitting} size="sm">
           <form
             onSubmit={handleCreate}
-            className="w-full max-w-lg rounded-2xl bg-card border border-border shadow-xl p-6 space-y-4"
+            className="p-6 space-y-4"
           >
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Add College Admin</h2>
@@ -256,7 +258,7 @@ export default function Staff() {
               {submitting ? "Creating…" : "Create Admin"}
             </button>
           </form>
-        </div>
+        </Modal>
       )}
     </div>
   );

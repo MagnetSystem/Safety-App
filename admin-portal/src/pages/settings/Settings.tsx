@@ -1,7 +1,9 @@
+import QueryError from '../../components/QueryError';
+import type { Organization } from '../../types/organization';
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/auth";
 import { canAddOrgAdmins, canManageOrgTeam } from "../../types/user";
 import { changePassword, updateMyProfile } from "../../services/authService";
 import {
@@ -30,10 +32,10 @@ export default function Settings() {
 
   return (
     <div className="page-shell">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">Settings</p>
-        <h1 className="text-2xl font-semibold tracking-tight mt-1">Account & organization</h1>
-        <p className="text-sm text-muted-foreground mt-1">Manage how you sign in and how this tenant is set up.</p>
+      <div className="section-intro">
+        <p className="page-overline">Settings</p>
+        <h1>Account & organization</h1>
+        <p>Manage how you sign in and how this tenant is set up.</p>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -41,7 +43,7 @@ export default function Settings() {
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium ${tab === t.id ? "bg-teal-600 text-white" : "bg-white border border-border text-slate-600"}`}
+            className={`min-h-11 rounded-full px-4 text-sm font-medium ${tab === t.id ? "bg-teal-600 text-white" : "bg-white border border-border text-slate-600"}`}
           >
             {t.label}
           </button>
@@ -83,20 +85,23 @@ export function AccountPanel({
   useEffect(() => setDisplayName(name), [name]);
 
   const saveName = async () => {
+    if (saving || !displayName.trim()) return;
+    setMessage("");
     setError("");
     setSaving(true);
     try {
       await updateMyProfile({ name: displayName.trim() });
       onNameSaved?.(displayName.trim());
       setMessage("Name saved.");
-    } catch (err: any) {
-      setError(err?.response?.data?.message ?? "Could not save name.");
+    } catch {
+      setError("Could not save name.");
     } finally {
       setSaving(false);
     }
   };
 
   const savePassword = async () => {
+    if (saving || !currentPassword) return;
     setError("");
     setMessage("");
     if (newPassword.length < 8) {
@@ -109,8 +114,8 @@ export function AccountPanel({
       setCurrentPassword("");
       setNewPassword("");
       setMessage("Password updated.");
-    } catch (err: any) {
-      setError(err?.response?.data?.message ?? "Could not change password.");
+    } catch {
+      setError("Could not change password.");
     } finally {
       setSaving(false);
     }
@@ -133,7 +138,7 @@ export function AccountPanel({
               Display name
               <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="mt-1 w-full border rounded-xl px-3 py-2" />
             </label>
-            <button onClick={saveName} disabled={saving} className="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm">
+            <button onClick={saveName} disabled={saving} className="rounded-xl bg-teal-600 px-4 py-2 text-sm text-white">
               Save name
             </button>
           </>
@@ -156,11 +161,11 @@ export function AccountPanel({
 function OrganizationPanel() {
   const { updateLocalUser } = useAuth();
   const queryClient = useQueryClient();
-  const { data: orgData, isLoading, isError } = useQuery({
+  const { data: orgData, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.organizations.me,
     queryFn: getMyOrganization,
   });
-  const [org, setOrg] = useState<any>(null);
+  const [org, setOrg] = useState<Organization | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -168,21 +173,24 @@ function OrganizationPanel() {
     if (orgData) setOrg(orgData);
   }, [orgData]);
 
+  if (isError) return <QueryError message="Unable to load organization." retry={refetch} />;
   if (isLoading || !org) {
     return <div className="text-sm text-slate-500">{isError || error ? "Could not load organization." : "Loading…"}</div>;
   }
 
   const save = async () => {
+    if (saving) return;
+    setError("");
     setSaving(true);
     try {
       const updated = await updateMyOrganization({
         name: org.name,
-        address: org.address,
-        state: org.state,
-        district: org.district,
-        principal: org.contactName,
-        phone: org.phone,
-        email: org.email,
+        address: org.address ?? "",
+        state: org.state ?? "",
+        district: org.district ?? "",
+        principal: org.contactName ?? "",
+        phone: org.phone ?? "",
+        email: org.email ?? "",
       });
       setOrg(updated);
       queryClient.setQueryData(queryKeys.organizations.me, updated);
@@ -198,7 +206,7 @@ function OrganizationPanel() {
     <div className="surface-card p-5 space-y-3 max-w-xl">
       {error && <p className="text-sm text-red-600">{error}</p>}
       <p className="text-xs text-slate-400">Type: {org.organizationType?.label ?? org.industry}</p>
-      {["name", "contactName", "phone", "email", "address", "state", "district"].map((key) => (
+      {(["name", "contactName", "phone", "email", "address", "state", "district"] as const).map((key) => (
         <label key={key} className="block text-sm capitalize">
           {key === "contactName" ? "Contact name" : key}
           <input
@@ -217,17 +225,19 @@ function OrganizationPanel() {
 
 function FeaturesPanel() {
   const queryClient = useQueryClient();
-  const { data: orgData, isLoading } = useQuery({
+  const { data: orgData, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.organizations.me,
     queryFn: getMyOrganization,
   });
-  const [settings, setSettings] = useState<any>(null);
+  const [settings, setSettings] = useState<(Record<string, unknown> & { features?: Record<string, boolean> }) | null>(null);
+  const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (orgData) setSettings(orgData.settings ?? {});
   }, [orgData]);
 
+  if (isError) return <QueryError message="Unable to load safety features." retry={refetch} />;
   if (isLoading || !settings) return <div className="text-sm text-slate-500">Loading…</div>;
 
   const features = settings.features ?? {};
@@ -235,10 +245,14 @@ function FeaturesPanel() {
     setSettings({ ...settings, features: { ...features, [key]: !features[key] } });
 
   const save = async () => {
+    if (saving) return;
+    setError("");
     setSaving(true);
     try {
       await updateMyOrgSettings(settings);
       queryClient.invalidateQueries({ queryKey: queryKeys.organizations.me });
+    } catch {
+      setError("Unable to save safety features. Your changes are preserved. Try again.");
     } finally {
       setSaving(false);
     }
@@ -246,6 +260,7 @@ function FeaturesPanel() {
 
   return (
     <div className="surface-card p-5 space-y-3 max-w-xl">
+      {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
       <p className="text-sm text-slate-500">These apply only to this organization.</p>
       {[
         ["reporting", "Members can file routine reports"],
@@ -295,13 +310,15 @@ function AccessPanel() {
       queryClient.setQueryData(queryKeys.organizations.joinCode, res);
       queryClient.invalidateQueries({ queryKey: queryKeys.organizations.me });
     },
-    onError: (err: any) => {
-      setActionError(err?.response?.data?.message ?? "Could not generate the access code.");
+    onError: () => {
+      setActionError("Could not generate the access code.");
     },
   });
   const busy = rotateMutation.isPending;
 
   const rotate = async () => {
+    if (busy) return;
+    setCopied(false);
     setActionError("");
     if (joinCode && !window.confirm("The old code will stop working immediately. Generate a new one?")) return;
     rotateMutation.mutate();
@@ -309,9 +326,8 @@ function AccessPanel() {
 
   const copy = async () => {
     if (!joinCode) return;
-    await navigator.clipboard.writeText(joinCode);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    try { await navigator.clipboard.writeText(joinCode); setCopied(true); }
+    catch { setActionError("Unable to copy. Select and copy the code manually."); }
   };
 
   return (

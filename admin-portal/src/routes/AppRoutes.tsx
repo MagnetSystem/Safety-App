@@ -3,8 +3,9 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import AppLayout from '../components/layout/AppLayout';
 import AuthLayout from '../layouts/AuthLayout';
 import SuperAdminLayout from '../layouts/SuperAdminLayout';
-import { useAuth } from '../context/AuthContext';
-import { isOrgDashboardRole } from '../types/user';
+import { useAuth } from '../context/auth';
+import QueryError from '../components/QueryError';
+import { isOrgDashboardRole, canManageOrgTeam } from '../types/user';
 
 const Dashboard = lazy(() => import('../pages/dashboard/Dashboard'));
 const ReportsList = lazy(() => import('../pages/reports/ReportsList'));
@@ -27,7 +28,9 @@ const Team = lazy(() => import('../pages/team/Team'));
 const SupportSettings = lazy(() => import('../pages/super-admin/SupportSettings'));
 
 function ProtectedRoute({ children, portal }: { children: React.ReactNode; portal: 'org' | 'support' }) {
-  const { isAuthenticated, role } = useAuth();
+  const { isAuthenticated, role, isLoading, sessionError, retrySession, logout } = useAuth();
+  if (isLoading) return <RouteFallback />;
+  if (sessionError) return <div className="p-6"><QueryError message="Unable to verify your session." retry={retrySession} /><button onClick={logout} className="mt-4 underline">Back to sign in</button></div>;
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -47,7 +50,9 @@ function ProtectedRoute({ children, portal }: { children: React.ReactNode; porta
 }
 
 function PublicRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, role } = useAuth();
+  const { isAuthenticated, role, isLoading, sessionError, retrySession, logout } = useAuth();
+  if (isLoading) return <RouteFallback />;
+  if (sessionError) return <div className="p-6"><QueryError message="Unable to verify your session." retry={retrySession} /><button onClick={logout} className="mt-4 underline">Back to sign in</button></div>;
 
   if (isAuthenticated) {
     if (role === 'support') return <Navigate to="/super-admin" replace />;
@@ -57,8 +62,13 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function ManageRoute({ children }: { children: React.ReactNode }) {
+  const { role } = useAuth();
+  return canManageOrgTeam(role) ? children : <Navigate to="/" replace />;
+}
+
 const RouteFallback = () => (
-  <div className="flex items-center justify-center py-24 text-muted-foreground text-sm">
+  <div role="status" className="flex items-center justify-center py-24 text-muted-foreground text-sm">
     Loading…
   </div>
 );
@@ -85,11 +95,11 @@ const AppRoutes = () => {
         <Route index element={<Dashboard />} />
         <Route path="reports" element={<ReportsList />} />
         <Route path="reports/:id" element={<ReportDetail />} />
-        <Route path="members" element={<Members />} />
+        <Route path="members" element={<ManageRoute><Members /></ManageRoute>} />
         <Route path="students" element={<Navigate to="/members" replace />} />
-        <Route path="team" element={<Team />} />
+        <Route path="team" element={<ManageRoute><Team /></ManageRoute>} />
         <Route path="staff" element={<Navigate to="/team" replace />} />
-        <Route path="departments" element={<Departments />} />
+        <Route path="departments" element={<ManageRoute><Departments /></ManageRoute>} />
         <Route path="search" element={<Search />} />
         <Route path="notifications" element={<Notifications />} />
         <Route path="settings" element={<Settings />} />

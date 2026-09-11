@@ -1,3 +1,4 @@
+import QueryError from '../../components/QueryError';
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Plus, Trash2, Building2 } from "lucide-react";
@@ -14,7 +15,7 @@ export default function Departments() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [actionError, setActionError] = useState("");
-  const { data: items = [], isLoading: loading, isError } = useQuery({
+  const { data: items = [], isLoading: loading, isError, refetch } = useQuery({
     queryKey: queryKeys.departments.all,
     queryFn: getDepartments,
   });
@@ -31,29 +32,33 @@ export default function Departments() {
     },
     onError: () => setActionError("Could not create department."),
   });
+  const actionMutation = useMutation({
+    mutationFn: ({ id, remove }: { id: string; remove: boolean }) => remove ? deleteDepartment(id) : updateDepartment(id, { isDefault: true }),
+    onMutate: () => setActionError(""),
+    onSuccess: invalidate,
+    onError: () => setActionError("Unable to update department. Please try again."),
+  });
   const saving = createMutation.isPending;
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (name.trim().length < 2) return;
+    if (saving || name.trim().length < 2) return;
     setActionError("");
     createMutation.mutate({ name: name.trim(), description: description.trim() || undefined });
   };
 
   return (
     <div className="page-shell">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">Organization</p>
-        <h1 className="text-2xl font-semibold tracking-tight mt-1">Departments</h1>
-        <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
+      <div className="section-intro">
+        <p className="page-overline">Organization</p>
+        <h1>Where cases land.</h1>
+        <p>
           Optional routing tags. A member belongs to one department; staff can cover several.
           Emergencies skip this queue and go to organization security plus any linked guardian.
         </p>
       </div>
 
-      {error && (
-        <div className="px-4 py-3 rounded-xl bg-red-50 text-red-700 text-sm border border-red-100">{error}</div>
-      )}
+      {error && <QueryError message={error} retry={refetch} />}
 
       <form onSubmit={handleCreate} className="surface-card p-5 grid sm:grid-cols-[1fr_1fr_auto] gap-3 items-end">
         <div>
@@ -85,7 +90,7 @@ export default function Departments() {
       </form>
 
       <div className="surface-card overflow-hidden">
-        {loading ? (
+        {isError ? null : loading ? (
           <div className="py-16 flex justify-center text-muted-foreground">
             <Loader2 className="animate-spin" />
           </div>
@@ -126,16 +131,19 @@ export default function Departments() {
                   <td className="px-5 py-4 text-right space-x-2">
                     {!d.isDefault && (
                       <button
-                        onClick={() => updateDepartment(d.id, { isDefault: true }).then(invalidate)}
+                        disabled={actionMutation.isPending}
+                        onClick={() => actionMutation.mutate({ id: d.id, remove: false })}
                         className="text-xs text-slate-500 hover:text-teal-700"
                       >
                         Make default
                       </button>
                     )}
                     <button
+                      aria-label={`Remove ${d.name}`}
+                      disabled={actionMutation.isPending}
                       onClick={() => {
                         if (window.confirm(`Remove ${d.name}? Existing cases stay, unassigned.`)) {
-                          deleteDepartment(d.id).then(invalidate);
+                          if (!actionMutation.isPending) actionMutation.mutate({ id: d.id, remove: true });
                         }
                       }}
                       className="inline-flex text-slate-400 hover:text-red-600"

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Check, ChevronRight, Copy, Loader2, Shield } from "lucide-react";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/auth";
 import { getIndustryCatalog, type IndustryCatalog } from "../../services/departmentsService";
 import { getMyOrganization } from "../../services/organizationsService";
 import { queryKeys } from "../../lib/queryKeys";
@@ -43,7 +43,7 @@ export default function Onboarding() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+    <div className="flex min-h-dvh items-center justify-center bg-[#f7f8f4] p-4">
       <div className="w-full max-w-xl surface-card p-8 animate-fade-in">
         <div className="flex gap-2 mb-8">
           {[0, 1, 2].map((i) => (

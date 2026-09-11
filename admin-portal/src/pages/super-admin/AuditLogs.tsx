@@ -1,10 +1,11 @@
+import QueryError from '../../components/QueryError';
 import { useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Search, Loader2, ChevronLeft, ChevronRight, Building } from "lucide-react";
 import { getAuditLogs } from "../../services/auditLogsService";
 import { getOrganizations } from "../../services/organizationsService";
 import { formatEnum } from "../../types/report";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/auth";
 import { queryKeys } from "../../lib/queryKeys";
 
 function timeAgo(iso: string) {
@@ -32,7 +33,7 @@ export default function AuditLogs() {
   });
   const colleges = orgsData?.items ?? [];
 
-  const { data, isLoading: loading, isError } = useQuery({
+  const { data, isLoading: loading, isError, refetch } = useQuery({
     queryKey: queryKeys.auditLogs.list(page, selectedCollegeId || undefined),
     queryFn: () => getAuditLogs({ page, pageSize: 20, collegeId: selectedCollegeId || undefined }),
     placeholderData: keepPreviousData,
@@ -53,21 +54,20 @@ export default function AuditLogs() {
   });
 
   return (
-    <div className="p-4 sm:p-6 space-y-5 max-w-[1400px] mx-auto">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-semibold">Audit Logs</h1>
-        <p className="text-sm text-muted-foreground">
-          Immutable record of sensitive actions across the platform
-        </p>
+    <div className="page-shell">
+      <div className="section-intro">
+        <p className="page-overline">Platform</p>
+        <h1>A record of care and action.</h1>
+        <p>Immutable history of sensitive actions across the platform.</p>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-4">
+      <div className="filter-strip">
         <div className="relative max-w-sm flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search logs on this page..."
+            placeholder="Filter this page: logs on this page..."
             className="w-full pl-9 pr-4 py-2 rounded-lg bg-card border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
         </div>
@@ -83,7 +83,7 @@ export default function AuditLogs() {
               }}
               className="w-full pl-9 pr-4 py-2 rounded-lg bg-card border border-border text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 appearance-none"
             >
-              <option value="">All Colleges</option>
+              <option value="">All organizations</option>
               {colleges.map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
@@ -92,14 +92,10 @@ export default function AuditLogs() {
         )}
       </div>
 
-      {error && (
-        <div className="px-3.5 py-2.5 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
-          {error}
-        </div>
-      )}
+      {error && <QueryError message={error} retry={refetch} />}
 
-      <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl overflow-hidden">
-        {loading ? (
+      <div className="surface-card overflow-hidden">
+        {isError && !data ? null : loading ? (
           <div className="flex items-center justify-center py-16 text-muted-foreground">
             <Loader2 className="animate-spin mr-2" size={18} /> Loading logs…
           </div>
@@ -136,7 +132,7 @@ export default function AuditLogs() {
       </div>
 
       {!loading && totalPages > 1 && (
-        <div className="flex items-center justify-between border border-border bg-card/60 rounded-xl px-4 py-3 backdrop-blur-xl">
+        <div className="flex items-center justify-between rounded-xl border border-border bg-white px-4 py-3">
           <p className="text-sm text-muted-foreground">
             Page {page} of {totalPages}
           </p>

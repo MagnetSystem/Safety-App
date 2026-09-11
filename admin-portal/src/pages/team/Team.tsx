@@ -1,3 +1,5 @@
+import QueryError from '../../components/QueryError';
+import Modal from '../../components/Modal';
 import { useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Plus, Search, Shield, UserCog, X } from "lucide-react";
@@ -10,11 +12,11 @@ import {
   type CreateStaffInput,
 } from "../../services/staffService";
 import { getDepartments } from "../../services/departmentsService";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/auth";
 import type { OrgRole, StaffMember } from "../../types/organization";
 import { canAddOrgAdmins, canManageOrgTeam } from "../../types/user";
 import { queryKeys } from "../../lib/queryKeys";
-import type { Paginated } from "../../types/report";
+
 import Pagination from "../../components/Pagination";
 import TableSkeleton from "../../components/TableSkeleton";
 import PasswordDialog from "../../components/PasswordDialog";
@@ -45,6 +47,7 @@ export default function Team() {
   const [page, setPage] = useState(1);
   const staffKey = queryKeys.staff.list({ page, pageSize: PAGE_SIZE });
   const [search, setSearch] = useState("");
+  const [statusBusy, setStatusBusy] = useState(false);
   const [actionError, setActionError] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -53,7 +56,7 @@ export default function Team() {
   const [resetError, setResetError] = useState("");
   const [resetBusy, setResetBusy] = useState(false);
 
-  const { data, isLoading: loading, isError } = useQuery({
+  const { data, isLoading: loading, isError, refetch } = useQuery({
     queryKey: staffKey,
     queryFn: () => getStaff({ page, pageSize: PAGE_SIZE }),
     placeholderData: keepPreviousData,
@@ -74,8 +77,8 @@ export default function Team() {
       setForm(EMPTY_FORM);
       queryClient.invalidateQueries({ queryKey: queryKeys.staff.all });
     },
-    onError: (err: any) => {
-      setFormError(err?.response?.data?.message || "Could not create the account.");
+    onError: () => {
+      setFormError("Could not create the account.");
     },
   });
   const submitting = createMutation.isPending;
@@ -83,7 +86,7 @@ export default function Team() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError("");
-    if (!canManage) return;
+    if (!canManage || submitting) return;
     if (form.orgRole === "ADMIN" && !canAddAdmin) {
       setFormError("Only the owner can add admins.");
       return;
@@ -100,29 +103,23 @@ export default function Team() {
   };
 
   const toggleStatus = async (member: StaffMember) => {
-    if (member.orgRole === "OWNER") return;
+    if (!canManage || statusBusy || member.orgRole === "OWNER" || member.user.id === user?.id) return;
+    if (member.user.isActive && !window.confirm(`Deactivate ${member.name}?`)) return;
+    setStatusBusy(true);
+    setActionError("");
     const wasActive = member.user.isActive;
-    queryClient.setQueryData<Paginated<StaffMember>>(staffKey, (old) =>
-      old
-        ? {
-            ...old,
-            items: old.items.map((x) =>
-              x.id === member.id ? { ...x, user: { ...x.user, isActive: !wasActive } } : x,
-            ),
-          }
-        : old,
-    );
     try {
       if (wasActive) await deactivateStaff(member.id);
       else await activateStaff(member.id);
-    } catch (err: any) {
-      setActionError(err?.response?.data?.message || "Could not update status.");
+      await queryClient.invalidateQueries({ queryKey: queryKeys.staff.all });
+    } catch {
+      setActionError("Could not update status.");
       queryClient.invalidateQueries({ queryKey: queryKeys.staff.all });
-    }
+    } finally { setStatusBusy(false); }
   };
 
   const handleResetPassword = async (newPassword: string) => {
-    if (!resetTarget) return;
+    if (!resetTarget || resetBusy) return;
     setResetBusy(true);
     setResetError("");
     try {
@@ -158,10 +155,10 @@ export default function Team() {
   return (
     <div className="page-shell">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">Organization</p>
-          <h1 className="text-2xl font-semibold tracking-tight mt-1">Admins & Staff</h1>
-          <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
+        <div className="section-intro border-0 p-0">
+          <p className="page-overline">Organization</p>
+          <h1>The people who respond.</h1>
+          <p>
             Add admins and staff for {user?.organizationName || "your organization"}. Admins can manage cases and staff;
             staff handle assigned cases.
           </p>
@@ -184,14 +181,12 @@ export default function Team() {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name, email, role..."
+          placeholder="Filter this page by name, email or role"
           className="w-full pl-9 pr-4 py-2 rounded-xl bg-white border border-border text-sm focus:outline-none focus:ring-2 focus:ring-teal-600/20"
         />
       </div>
 
-      {error && (
-        <div className="px-4 py-3 rounded-xl bg-red-50 text-red-700 text-sm border border-red-100">{error}</div>
-      )}
+      {error && <QueryError message={error} retry={refetch} />}
 
       {(ownerRow || role === "owner") && (
         <div className="surface-card p-4 flex items-center gap-3">
@@ -210,7 +205,7 @@ export default function Team() {
       )}
 
       <div className="surface-card overflow-hidden">
-        {loading ? (
+        {isError && !data ? null : loading ? (
           <TableSkeleton />
         ) : filtered.length === 0 ? (
           <div className="py-16 text-center text-sm text-muted-foreground">
@@ -302,10 +297,10 @@ export default function Team() {
       />
 
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
+        <Modal label="Add team member" onClose={() => setShowForm(false)} busy={submitting} size="sm">
           <form
             onSubmit={handleCreate}
-            className="w-full max-w-lg rounded-2xl bg-white border border-border shadow-xl p-6 space-y-4"
+            className="p-6 space-y-4"
           >
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Add team member</h2>
@@ -410,7 +405,7 @@ export default function Team() {
               {submitting ? "Creating…" : `Create ${form.orgRole === "ADMIN" ? "admin" : "staff"}`}
             </button>
           </form>
-        </div>
+        </Modal>
       )}
     </div>
   );

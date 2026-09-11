@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { LogOut } from "lucide-react";
 import { AccountPanel } from "../settings/Settings";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/auth";
 
 export default function SupportSettings() {
   const { user, logout } = useAuth();
@@ -10,10 +10,10 @@ export default function SupportSettings() {
   return (
     <div className="page-shell">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">Support</p>
-          <h1 className="text-2xl font-semibold tracking-tight mt-1">Your account</h1>
-          <p className="text-sm text-muted-foreground mt-1">Password for the Magnet Systems support login. Organization types and tenants are managed from the other menu items.</p>
+        <div className="section-intro border-0 p-0">
+          <p className="page-overline">Support</p>
+          <h1>Your account</h1>
+          <p>Password for the platform support login. Organization types and tenants live in the other menu items.</p>
         </div>
         <button
           type="button"

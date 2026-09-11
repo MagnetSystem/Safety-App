@@ -18,7 +18,7 @@ export default function Pagination({
   if (total === 0) return null;
 
   return (
-    <div className="flex items-center justify-between border border-border bg-card/60 rounded-xl px-4 py-3 backdrop-blur-xl">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-white px-4 py-3">
       <p className="text-sm text-muted-foreground">
         {from}–{to} of {total}
       </p>
@@ -39,7 +39,7 @@ export default function Pagination({
           <button
             type="button"
             onClick={() => onPageChange(Math.min(totalPages, page + 1))}
-            disabled={page === totalPages}
+            disabled={page >= totalPages}
             className="p-1.5 rounded-lg border border-border hover:bg-muted disabled:opacity-50 transition"
             aria-label="Next page"
           >

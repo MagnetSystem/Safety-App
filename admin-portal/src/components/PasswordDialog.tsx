@@ -1,4 +1,5 @@
-import { useState } from "react";
+import Modal from './Modal';
+import { useEffect, useState } from "react";
 import { Loader2, X } from "lucide-react";
 
 export default function PasswordDialog({
@@ -20,24 +21,26 @@ export default function PasswordDialog({
 }) {
   const [password, setPassword] = useState("");
 
+  useEffect(() => { if (!open) setPassword(""); }, [open]);
+
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+    <Modal label={title} onClose={onClose} busy={submitting}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          if (password.length < 8) return;
+          if (submitting || password.length < 8) return;
           onSubmit(password);
         }}
-        className="bg-white w-full max-w-md rounded-2xl border border-border shadow-2xl overflow-hidden"
+        className="overflow-hidden"
       >
         <div className="p-5 border-b border-border flex items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
             {description && <p className="text-sm text-slate-500 mt-1">{description}</p>}
           </div>
-          <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted" aria-label="Close">
+          <button type="button" disabled={submitting} onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted" aria-label="Close">
             <X size={16} />
           </button>
         </div>
@@ -48,6 +51,8 @@ export default function PasswordDialog({
           <label className="block text-sm">
             New password
             <input
+              disabled={submitting}
+              autoComplete="new-password"
               type="password"
               required
               minLength={8}
@@ -60,7 +65,7 @@ export default function PasswordDialog({
           </label>
         </div>
         <div className="p-4 bg-slate-50 border-t border-border flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-border hover:bg-muted">
+          <button type="button" disabled={submitting} onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-border hover:bg-muted">
             Cancel
           </button>
           <button
@@ -73,6 +78,6 @@ export default function PasswordDialog({
           </button>
         </div>
       </form>
-    </div>
+    </Modal>
   );
 }

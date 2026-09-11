@@ -1,3 +1,5 @@
+import QueryError from '../../components/QueryError';
+import Modal from '../../components/Modal';
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,7 +13,7 @@ import {
 } from "../../services/incidentsService";
 import { getStaff } from "../../services/staffService";
 import { formatEnum, type ComplaintStatus } from "../../types/report";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/auth";
 import { canManageOrgTeam } from "../../types/user";
 import { queryKeys } from "../../lib/queryKeys";
 import { reportsListPath } from "../../lib/paths";
@@ -54,14 +56,14 @@ export default function ReportDetail() {
   });
   const messagesQuery = useQuery({
     queryKey: queryKeys.reports.messages(id ?? ""),
-    queryFn: () => getMessages(id!).catch(() => [] as ComplaintMessage[]),
+    queryFn: () => getMessages(id!),
     enabled: !!id,
   });
 
   const report = reportQuery.data ?? null;
   const evidence = evidenceQuery.data ?? [];
   const messages = messagesQuery.data ?? [];
-  const loading = reportQuery.isLoading || evidenceQuery.isLoading || messagesQuery.isLoading;
+  const loading = reportQuery.isLoading;
 
   const staffQuery = useQuery({
     queryKey: queryKeys.staff.list({ pageSize: 100, organizationId: report?.collegeId }),
@@ -69,9 +71,7 @@ export default function ReportDetail() {
     enabled: canAssign && !!report,
   });
   const staff = staffQuery.data?.items ?? [];
-  const error = reportQuery.isError || evidenceQuery.isError
-    ? "Could not load this report."
-    : actionError;
+  const error = reportQuery.isError ? "Could not load this report." : "";
 
   useEffect(() => {
     if (report) {
@@ -93,6 +93,7 @@ export default function ReportDetail() {
   const handleSendMessage = async () => {
     const body = draft.trim();
     if (!id || !body || sendingMsg) return;
+    setActionError("");
     sendMutation.mutate(body);
   };
 
@@ -108,7 +109,7 @@ export default function ReportDetail() {
       setPendingStatus(null);
       setResolutionReport("");
     },
-    onError: () => setActionError("Could not update status."),
+    onError: () => { setActionError("Could not update status. Your draft is preserved. Try again."); setStatusValue(report?.status ?? "SUBMITTED"); },
   });
   const updating = statusMutation.isPending;
 
@@ -131,12 +132,13 @@ export default function ReportDetail() {
   };
 
   const submitStatusChange = async (next: ComplaintStatus, reportText?: string) => {
-    if (!id) return;
+    if (!id || updating) return;
+    setActionError("");
     statusMutation.mutate({ next, reportText });
   };
 
   const handleConfirmResolution = () => {
-    if (pendingStatus && resolutionReport.trim().length > 10) {
+    if (pendingStatus && resolutionReport.trim().length >= 10) {
       submitStatusChange(pendingStatus, resolutionReport.trim());
     }
   };
@@ -148,7 +150,7 @@ export default function ReportDetail() {
       queryClient.invalidateQueries({ queryKey: queryKeys.reports.all });
       setAssigneeId(updated.assignedTo?.id ?? updated.assignedCommitteeUserIds?.[0] ?? assigneeId);
     },
-    onError: () => setActionError("Could not assign this case."),
+    onError: () => { setActionError("Could not assign this case. Try again."); setAssigneeId(report?.assignedTo?.id ?? report?.assignedCommitteeUserIds?.[0] ?? ""); },
   });
 
   const downloadPDF = async () => {
@@ -201,27 +203,24 @@ export default function ReportDetail() {
 
   if (error || !report) {
     return (
-      <div className="p-6 max-w-[1100px] mx-auto">
-        <div className="px-3.5 py-2.5 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
-          {error || "Report not found."}
-        </div>
+      <div className="page-shell max-w-[1100px]">
+        <QueryError message={error || "Report not found."} retry={() => reportQuery.refetch()} />
       </div>
     );
   }
 
   return (
     <>
-      <div className="p-4 sm:p-6 max-w-[1100px] mx-auto space-y-6">
-      {/* Header */}
+      <div className="page-shell max-w-[1100px]">
+      {actionError && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{actionError}</div>}
       <div className="flex items-center gap-3">
-        <Link to={reportsListPath(role)} className="p-2 rounded-lg hover:bg-muted transition">
+        <Link to={reportsListPath(role)} className="icon-button" aria-label="Back to cases">
           <ArrowLeft size={20} />
         </Link>
         <div>
-          <h1 className="text-xl font-semibold">Report {report.code}</h1>
-          <p className="text-sm text-muted-foreground">
-            Submitted {new Date(report.createdAt).toLocaleString()}
-          </p>
+          <p className="page-overline">Case</p>
+          <h1>{report.code}</h1>
+          <p>Submitted {new Date(report.createdAt).toLocaleString()}</p>
         </div>
       </div>
 
@@ -229,7 +228,7 @@ export default function ReportDetail() {
         {/* Main content */}
         <div className="lg:col-span-2 space-y-5">
           {/* Summary card */}
-          <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl p-5 space-y-4">
+          <div className="surface-card p-5 space-y-4">
             <div className="flex flex-wrap gap-2">
               <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-destructive/15 text-destructive">
                 {formatEnum(report.type)}
@@ -303,7 +302,7 @@ export default function ReportDetail() {
           
           {/* Resolution Report */}
           {report.resolutionReport && (
-             <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl p-5 space-y-4">
+             <div className="surface-card p-5 space-y-4">
                <div className="flex items-center justify-between">
                  <h3 className="font-medium text-lg flex items-center gap-2">
                    <FileText size={18} className="text-primary" /> Official Resolution Report
@@ -324,9 +323,9 @@ export default function ReportDetail() {
           )}
 
           {/* Evidence */}
-          <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl p-5">
+          <div className="surface-card p-5">
             <h3 className="font-medium mb-3">Evidence</h3>
-            {evidence.length === 0 ? (
+            {evidenceQuery.isLoading ? <p role="status">Loading evidence…</p> : evidenceQuery.isError ? <QueryError message="Unable to load evidence." retry={() => evidenceQuery.refetch()} /> : evidence.length === 0 ? (
               <p className="text-sm text-muted-foreground">No evidence uploaded.</p>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -347,7 +346,7 @@ export default function ReportDetail() {
           </div>
 
           {/* Conversation with student */}
-          <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl p-5">
+          <div className="surface-card p-5">
             <h3 className="font-medium mb-1 flex items-center gap-2">
               <MessageSquare size={18} className="text-primary" />
               Conversation with {report.type === "ANONYMOUS" ? "reporter" : "student"}
@@ -357,7 +356,7 @@ export default function ReportDetail() {
               more information.
             </p>
 
-            {messages.length === 0 ? (
+            {messagesQuery.isLoading ? <p role="status">Loading messages…</p> : messagesQuery.isError ? <QueryError message="Unable to load messages." retry={() => messagesQuery.refetch()} /> : messages.length === 0 ? (
               <p className="text-sm text-muted-foreground">No messages yet.</p>
             ) : (
               <div className="space-y-3 mb-4">
@@ -388,6 +387,8 @@ export default function ReportDetail() {
             {canManage && (
               <div className="flex gap-2">
                 <textarea
+                  aria-label="Message to reporter"
+                  disabled={sendingMsg}
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   rows={2}
@@ -396,7 +397,7 @@ export default function ReportDetail() {
                 />
                 <button
                   onClick={handleSendMessage}
-                  disabled={sendingMsg || !draft.trim()}
+                  disabled={sendingMsg || messagesQuery.isError || !draft.trim()}
                   className="px-4 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 disabled:opacity-50 transition"
                 >
                   {sendingMsg ? "…" : "Send"}
@@ -406,7 +407,7 @@ export default function ReportDetail() {
           </div>
 
           {/* Timeline */}
-          <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl p-5">
+          <div className="surface-card p-5">
             <h3 className="font-medium mb-4">Timeline</h3>
             <div className="space-y-4">
               {(report.timeline ?? []).map((t) => (
@@ -427,14 +428,15 @@ export default function ReportDetail() {
 
         {/* Sidebar actions */}
         <div className="space-y-4">
-          <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl p-5 space-y-4">
+          <div className="surface-card p-5 space-y-4">
             <h3 className="font-medium">Actions</h3>
 
             {canManage ? (
               <>
                 <div>
-                  <label className="text-sm text-muted-foreground">Change Status</label>
+                  <label htmlFor="case-status" className="text-sm text-muted-foreground">Change Status</label>
                   <select
+                    id="case-status"
                     value={statusValue}
                     disabled={updating}
                     onChange={(e) => handleStatusSelect(e.target.value as ComplaintStatus)}
@@ -465,21 +467,25 @@ export default function ReportDetail() {
             )}
           </div>
 
-          <div className="rounded-xl border border-border bg-card/60 backdrop-blur-xl p-5 space-y-3">
+          <div className="surface-card p-5 space-y-3">
             <h3 className="font-medium">Assignee</h3>
             {canAssign ? (
               <>
+                {staffQuery.isError && <QueryError message="Unable to load staff." retry={() => staffQuery.refetch()} />}
                 <select
+                  aria-label="Assign case"
                   value={assigneeId}
-                  disabled={assignMutation.isPending}
+                  disabled={assignMutation.isPending || staffQuery.isLoading || staffQuery.isError}
                   onChange={(e) => {
                     const next = e.target.value;
+                    if (!next || next === assigneeId || assignMutation.isPending) return;
+                    setActionError("");
                     setAssigneeId(next);
                     if (next) assignMutation.mutate(next);
                   }}
                   className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-60"
                 >
-                  <option value="">Unassigned</option>
+                  <option value="" disabled>Select assignee</option>
                   {staff.filter((m) => m.user.isActive).map((m) => (
                     <option key={m.user.id} value={m.user.id}>
                       {m.name} · {m.orgRole === "OWNER" ? "Owner" : m.orgRole === "ADMIN" ? "Admin" : "Staff"}
@@ -510,7 +516,7 @@ export default function ReportDetail() {
       
       {/* Modal Overlay for Resolution Report */}
       {pendingStatus && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
+        <Modal label="Resolve case" busy={updating} onClose={() => { setPendingStatus(null); setStatusValue(report.status); }}>
           <div className="bg-card w-full max-w-2xl rounded-2xl border border-border shadow-2xl overflow-hidden flex flex-col">
             <div className="p-6 border-b border-border bg-muted/30">
               <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
@@ -522,7 +528,10 @@ export default function ReportDetail() {
             </div>
             
             <div className="p-6 flex-1">
+              {actionError && <p role="alert" className="mb-3 text-red-700">{actionError}</p>}
               <textarea
+                aria-label="Resolution report"
+                disabled={updating}
                 value={resolutionReport}
                 onChange={(e) => setResolutionReport(e.target.value)}
                 placeholder="Detail the investigation findings, actions taken, and the final resolution..."
@@ -536,6 +545,7 @@ export default function ReportDetail() {
 
             <div className="p-6 border-t border-border bg-muted/10 flex gap-3 justify-end">
               <button
+                disabled={updating}
                 onClick={() => {
                   setPendingStatus(null);
                   setStatusValue(report.status);
@@ -553,7 +563,7 @@ export default function ReportDetail() {
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </>
   );

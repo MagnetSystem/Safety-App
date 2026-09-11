@@ -24,7 +24,7 @@ export default function ForgotPassword() {
   };
 
   return (
-    <div className="rounded-2xl border border-border bg-card/70 backdrop-blur-2xl shadow-xl p-6 sm:p-8">
+    <div className="rounded-2xl border border-border bg-white p-6 sm:p-8 shadow-[0_1px_3px_rgb(15_23_42_/_0.04)]">
       <Link
         to="/login"
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6"

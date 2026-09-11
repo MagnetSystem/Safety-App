@@ -1,8 +1,9 @@
+import QueryError from '../../components/QueryError';
 import { useState } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, AlertTriangle, FileText, Upload, Loader2, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/auth";
 import { reportPath } from "../../lib/paths";
 import Pagination from "../../components/Pagination";
 import {
@@ -38,9 +39,11 @@ export default function Notifications() {
   const { role } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [actionError, setActionError] = useState("");
+  const [busy, setBusy] = useState(false);
   const [page, setPage] = useState(1);
   const listKey = queryKeys.notifications.list(PAGE_SIZE, page);
-  const { data, isLoading: loading } = useQuery({
+  const { data, isLoading: loading, isError, refetch } = useQuery({
     queryKey: listKey,
     queryFn: () => getNotifications({ page, pageSize: PAGE_SIZE }),
     placeholderData: keepPreviousData,
@@ -62,38 +65,43 @@ export default function Notifications() {
     
     if (n.isRead) return;
     
-    patchList((prev) => prev.map((x) => (x.id === n.id ? { ...x, isRead: true } : x)));
     try {
       await markNotificationRead(n.id);
+      patchList((prev) => prev.map((x) => x.id === n.id ? { ...x, isRead: true } : x));
       queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
     } catch {
-      // best-effort
+      setActionError("Unable to mark notifications as read. Please try again.");
     }
   };
 
   const handleMarkAll = async () => {
-    patchList((prev) => prev.map((x) => ({ ...x, isRead: true })));
+    if (busy) return;
+    setBusy(true);
+    setActionError("");
     try {
       await markAllNotificationsRead();
+      patchList((prev) => prev.map((x) => ({ ...x, isRead: true })));
       queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
     } catch {
-      // best-effort
-    }
+      setActionError("Unable to mark notifications as read. Please try again.");
+    } finally { setBusy(false); }
   };
 
   return (
-    <div className="p-4 sm:p-6 max-w-[800px] mx-auto space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-semibold">Notifications</h1>
-          <p className="text-sm text-muted-foreground">Stay updated on new reports and activity</p>
+    <div className="page-shell max-w-[800px]">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="section-intro border-0 p-0">
+          <p className="page-overline">Inbox</p>
+          <h1>Stay close to what matters.</h1>
+          <p>New reports and case activity, without the noise.</p>
         </div>
-        <button onClick={handleMarkAll} className="text-sm text-primary hover:underline">
+        <button disabled={busy || loading || isError || !notifications.length} onClick={handleMarkAll} className="text-sm font-medium text-primary hover:underline">
           Mark all as read
         </button>
       </div>
 
-      {loading ? (
+      {actionError && <p role="alert" className="text-sm text-red-700">{actionError}</p>}
+      {isError ? <QueryError message="Unable to load notifications." retry={refetch} /> : loading ? (
         <div className="flex items-center justify-center py-16 text-muted-foreground">
           <Loader2 className="animate-spin mr-2" size={18} /> Loading…
         </div>
@@ -103,18 +111,17 @@ export default function Notifications() {
           No notifications yet.
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="surface-card overflow-hidden">
           {notifications.map((n) => {
             const { icon, cls } = iconFor(n.type);
             return (
               <div
+                role="button"
+                tabIndex={0}
+                onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); void handleClick(n); } }}
                 key={n.id}
                 onClick={() => handleClick(n)}
-                className={`flex gap-3 p-4 rounded-xl border transition cursor-pointer group ${
-                  !n.isRead
-                    ? "bg-primary/5 border-primary/20 hover:bg-primary/10"
-                    : "bg-card/60 border-border hover:bg-muted/40"
-                }`}
+                className={`notification-item flex cursor-pointer gap-3 group ${!n.isRead ? "notification-unread" : ""}`}
               >
                 <div className={`mt-0.5 p-2 rounded-lg shrink-0 ${cls}`}>{icon}</div>
                 <div className="flex-1 min-w-0">
