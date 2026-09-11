@@ -96,7 +96,7 @@ export default function EmergencyScreen() {
 
   if (submitted) {
     return (
-      <Screen padded style={styles.successScreen}>
+      <Screen padded isEmergency>
         <View style={styles.successContent}>
           <CheckCircle2 size={80} strokeWidth={1.5} color="#FFFFFF" />
           <Text style={styles.successTitle}>{queuedOffline ? 'Alert saved' : 'Alert sent'}</Text>
@@ -233,9 +233,6 @@ function Row({ label, value, valueHighlight }: { label: string; value: string; v
 const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: spacing.xxl,
-  },
-  successScreen: {
-    backgroundColor: '#E0605C',
   },
   successContent: {
     flex: 1,
