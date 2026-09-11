@@ -1,11 +1,38 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, TextInput, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  ScrollView,
+  ActivityIndicator,
+  Alert,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
+  Animated,
+  Easing,
+} from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { HeartPulse, Edit2, Check, X, Download, Trash2 } from 'lucide-react-native';
+import {
+  HeartPulse,
+  Edit2,
+  Check,
+  X,
+  Download,
+  Trash2,
+  GraduationCap,
+  Building2,
+  UserPlus,
+  Lock,
+  Shield,
+  LogOut,
+  ChevronRight,
+} from 'lucide-react-native';
 import { Screen } from '../../src/components/PhoneFrame';
-import { Glass, ScreenHeader, GlassInput } from '../../src/components/ui-kit';
+import { Glass, GlassInput } from '../../src/components/ui-kit';
 import {
   getMyProfile, updateMyProfile, exportMyData, deleteMyAccount, joinOrganization,
 } from '../../src/services/membersService';
@@ -14,6 +41,11 @@ import { inviteGuardian, listMyGuardians, acceptGuardianCode } from '../../src/s
 import type { StudentProfile } from '../../src/types';
 import { colors, radius, spacing, typography } from '../../src/constants/theme';
 import { useAuth } from '../../src/store/AuthContext';
+import { tapFeedback, successFeedback } from '../../src/services/haptics';
+
+type ProfileSheet = 'academic' | 'medical' | 'org' | 'guardian' | 'password' | 'privacy';
+
+type IconType = React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
@@ -24,20 +56,120 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
+function MenuRow({
+  icon: Icon,
+  label,
+  value,
+  onPress,
+  destructive,
+}: {
+  icon: IconType;
+  label: string;
+  value?: string;
+  onPress: () => void;
+  destructive?: boolean;
+}) {
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]}
+      onPress={onPress}
+    >
+      <View style={[styles.menuIcon, destructive && styles.menuIconDanger]}>
+        <Icon size={18} strokeWidth={1.8} color={destructive ? '#C0433E' : colors.indigoink} />
+      </View>
+      <Text style={[styles.menuLabel, destructive && styles.deleteText]} numberOfLines={1}>
+        {label}
+      </Text>
+      {value ? (
+        <Text style={styles.menuValue} numberOfLines={1}>{value}</Text>
+      ) : null}
+      {!destructive && <ChevronRight size={18} color={colors.mutedink} />}
+    </Pressable>
+  );
+}
+
+const SHEET_TITLES: Record<ProfileSheet, string> = {
+  academic: 'Academic & Contact Details',
+  medical: 'Emergency medical info',
+  org: 'Organization',
+  guardian: 'Guardian',
+  password: 'Change password',
+  privacy: 'Privacy & data',
+};
+
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const SCRAMBLE_LEN = 6;
+
+function InviteCodeCard({ generating, code }: { generating: boolean; code: string | null }) {
+  const [shown, setShown] = useState('••••••');
+  const pulse = React.useRef(new Animated.Value(1)).current;
+  const scale = React.useRef(new Animated.Value(1)).current;
+  const wasGenerating = React.useRef(false);
+
+  React.useEffect(() => {
+    if (generating) {
+      wasGenerating.current = true;
+      pulse.setValue(0.55);
+      const tick = setInterval(() => {
+        let next = '';
+        for (let i = 0; i < SCRAMBLE_LEN; i += 1) {
+          next += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+        }
+        setShown(next);
+      }, 55);
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulse, { toValue: 1, duration: 420, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(pulse, { toValue: 0.5, duration: 420, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        ]),
+      );
+      loop.start();
+      return () => {
+        clearInterval(tick);
+        loop.stop();
+      };
+    }
+
+    pulse.stopAnimation();
+    pulse.setValue(1);
+    if (code && wasGenerating.current) {
+      wasGenerating.current = false;
+      setShown(code);
+      scale.setValue(0.86);
+      Animated.spring(scale, { toValue: 1, friction: 6, tension: 140, useNativeDriver: true }).start();
+      return;
+    }
+    if (code) setShown(code);
+  }, [generating, code, pulse, scale]);
+
+  if (!generating && !code) return null;
+
+  return (
+    <Animated.View style={[styles.codeCard, { opacity: pulse, transform: [{ scale }] }]}>
+      <Text style={styles.codeLabel}>
+        {generating ? 'Generating invite code' : 'Share this one-time code'}
+      </Text>
+      <Text style={[styles.codeDigits, generating && styles.codeDigitsLive]}>{shown}</Text>
+      <Text style={styles.codeHint}>
+        {generating ? 'This only takes a moment…' : 'Your guardian enters this in their app'}
+      </Text>
+    </Animated.View>
+  );
+}
+
 const NOT_SET = 'Not set';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { logout } = useAuth();
-  
+
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  // Editing State
+  const [sheet, setSheet] = useState<ProfileSheet | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  
+
   const [formData, setFormData] = useState({
     mobile: '',
     studentNumber: '',
@@ -51,23 +183,27 @@ export default function ProfileScreen() {
     emergencyContactPhone: '',
   });
 
+  const applyProfile = (p: StudentProfile) => {
+    setProfile(p);
+    setFormData({
+      mobile: p.mobile || '',
+      studentNumber: p.studentNumber || '',
+      department: p.department || '',
+      course: p.course || '',
+      semester: p.semester || '',
+      year: p.year?.toString() || '',
+      isHosteler: p.isHosteler || false,
+      bloodGroup: p.bloodGroup || '',
+      emergencyContactName: p.emergencyContactName || '',
+      emergencyContactPhone: p.emergencyContactPhone || '',
+    });
+  };
+
   const loadProfile = () => {
     setLoading(true);
     getMyProfile()
       .then((p) => {
-        setProfile(p);
-        setFormData({
-          mobile: p.mobile || '',
-          studentNumber: p.studentNumber || '',
-          department: p.department || '',
-          course: p.course || '',
-          semester: p.semester || '',
-          year: p.year?.toString() || '',
-          isHosteler: p.isHosteler || false,
-          bloodGroup: p.bloodGroup || '',
-          emergencyContactName: p.emergencyContactName || '',
-          emergencyContactPhone: p.emergencyContactPhone || '',
-        });
+        applyProfile(p);
         setError(null);
         listMyGuardians().then(setGuardians).catch(() => undefined);
       })
@@ -85,6 +221,7 @@ export default function ProfileScreen() {
   const [joinCode, setJoinCode] = useState('');
   const [joining, setJoining] = useState(false);
   const [guardianCode, setGuardianCode] = useState<string | null>(null);
+  const [inviting, setInviting] = useState(false);
   const [acceptCode, setAcceptCode] = useState('');
   const [guardians, setGuardians] = useState<{ id: string; status: string; guardian: { email: string } | null }[]>([]);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -93,7 +230,22 @@ export default function ProfileScreen() {
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [passwordMsg, setPasswordMsg] = useState<string | null>(null);
 
+  const openSheet = (id: ProfileSheet) => {
+    tapFeedback();
+    setIsEditing(false);
+    setError(null);
+    setPasswordMsg(null);
+    setSheet(id);
+  };
+
+  const closeSheet = () => {
+    if (isEditing && profile) applyProfile(profile);
+    setIsEditing(false);
+    setSheet(null);
+  };
+
   const handleSignOut = async () => {
+    tapFeedback();
     await logout();
     router.replace('/(auth)/login');
   };
@@ -164,7 +316,7 @@ export default function ProfileScreen() {
       ],
     );
   };
-  
+
   const handleSave = async () => {
     setSaving(true);
     setError(null);
@@ -173,7 +325,7 @@ export default function ProfileScreen() {
         ...formData,
         year: formData.year ? parseInt(formData.year, 10) : undefined,
       });
-      setProfile(updated);
+      applyProfile(updated);
       setIsEditing(false);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Could not save profile');
@@ -184,20 +336,48 @@ export default function ProfileScreen() {
 
   const handleCancel = () => {
     setIsEditing(false);
-    // Reset form data to current profile
-    if (profile) {
-      setFormData({
-        mobile: profile.mobile || '',
-        studentNumber: profile.studentNumber || '',
-        department: profile.department || '',
-        course: profile.course || '',
-        semester: profile.semester || '',
-        year: profile.year?.toString() || '',
-        isHosteler: profile.isHosteler || false,
-        bloodGroup: profile.bloodGroup || '',
-        emergencyContactName: profile.emergencyContactName || '',
-        emergencyContactPhone: profile.emergencyContactPhone || '',
-      });
+    if (profile) applyProfile(profile);
+  };
+
+  const handleJoinOrg = async () => {
+    setJoining(true);
+    try {
+      await joinOrganization(joinCode.trim());
+      loadProfile();
+    } catch (err: any) {
+      Alert.alert('Could not join', err?.response?.data?.message ?? 'Check the join code.');
+    } finally {
+      setJoining(false);
+    }
+  };
+
+  const handleInviteGuardian = async () => {
+    if (inviting) return;
+    tapFeedback();
+    setInviting(true);
+    setGuardianCode(null);
+    const started = Date.now();
+    try {
+      const invited = await inviteGuardian();
+      const wait = Math.max(0, 1100 - (Date.now() - started));
+      if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
+      setGuardianCode(invited.code);
+      successFeedback();
+    } catch {
+      Alert.alert('Could not create invite', 'Please try again in a moment.');
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const handleAcceptGuardian = async () => {
+    try {
+      await acceptGuardianCode(acceptCode.trim());
+      Alert.alert('Connected', 'You will be alerted if they trigger Emergency SOS.');
+      setAcceptCode('');
+      listMyGuardians().then(setGuardians).catch(() => undefined);
+    } catch (err: any) {
+      Alert.alert('Could not accept', err?.response?.data?.message ?? 'Invalid code.');
     }
   };
 
@@ -217,219 +397,31 @@ export default function ProfileScreen() {
     .join('')
     .slice(0, 2)
     .toUpperCase();
+  const orgName = profile?.college?.name ?? profile?.organization?.name;
+  const canEditSheet = sheet === 'academic' || sheet === 'medical';
 
-  return (
-    <Screen padded>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.headerRow}>
-          <Text style={styles.screenTitle}>Profile</Text>
-          {!isEditing && (
-            <Pressable onPress={() => setIsEditing(true)} style={styles.editButton}>
-              <Edit2 size={18} color={colors.indigoink} />
-              <Text style={styles.editButtonText}>Edit</Text>
-            </Pressable>
-          )}
-        </View>
-
-        {error && <Text style={styles.error}>{error}</Text>}
-
-        <View style={styles.avatarSection}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarInitials}>{initials || '?'}</Text>
-          </View>
-          <Text style={styles.name}>{name}</Text>
-          <Text style={styles.college}>{profile?.college?.name ?? profile?.organization?.name ?? 'No organization yet'}</Text>
-        </View>
-
-        {!isEditing ? (
-          // VIEW MODE
-          <>
-            <Glass style={styles.detailsCard}>
-              <Text style={styles.sectionHeader}>Academic & Contact Details</Text>
-              <View style={styles.divider} />
-              <Row label="Mobile" value={profile?.mobile ?? NOT_SET} />
-              <View style={styles.divider} />
-              <Row label="Roll number" value={profile?.studentNumber ?? NOT_SET} />
-              <View style={styles.divider} />
-              <Row label="Email" value={profile?.user?.email ?? NOT_SET} />
-              <View style={styles.divider} />
-              <Row label="Department" value={profile?.department ?? NOT_SET} />
-              <View style={styles.divider} />
-              <Row label="Course" value={profile?.course ?? NOT_SET} />
-              <View style={styles.divider} />
-              <Row label="Semester" value={profile?.semester ?? NOT_SET} />
-              <View style={styles.divider} />
-              <Row label="Year" value={profile?.year?.toString() ?? NOT_SET} />
-              <View style={styles.divider} />
-              <Row label="Residence" value={profile?.isHosteler ? 'Hosteler' : 'Day Scholar'} />
-            </Glass>
-
-            <Glass style={styles.medicalCard}>
-              <View style={styles.medicalHeader}>
-                <HeartPulse size={18} strokeWidth={1.8} color={colors.indigoink} />
-                <Text style={styles.medicalTitle}>Emergency medical info</Text>
-              </View>
-              <Text style={styles.medicalDesc}>
-                Shared only when you send an emergency alert.
-              </Text>
-              <View style={styles.medicalContent}>
-                <Row label="Emergency Contact" value={profile?.emergencyContactName ?? NOT_SET} />
-                <View style={styles.divider} />
-                <Row label="Emergency Phone" value={profile?.emergencyContactPhone ?? NOT_SET} />
-                <View style={styles.divider} />
-                <Row label="Blood group" value={profile?.bloodGroup ?? NOT_SET} />
-              </View>
-            </Glass>
-
-            <Glass style={styles.detailsCard}>
-              <Text style={styles.sectionHeader}>Organization &amp; Guardian</Text>
-              <View style={styles.divider} />
-              {!(profile?.organizationId || profile?.college?.id) && (
-                <>
-                  <GlassInput label="Join code" placeholder="DEMOJOIN" value={joinCode} onChangeText={(t) => setJoinCode(t.toUpperCase())} autoCapitalize="characters" />
-                  <Pressable
-                    style={styles.signOutBtn}
-                    disabled={joining || joinCode.length < 4}
-                    onPress={async () => {
-                      setJoining(true);
-                      try {
-                        await joinOrganization(joinCode.trim());
-                        loadProfile();
-                      } catch (err: any) {
-                        Alert.alert('Could not join', err?.response?.data?.message ?? 'Check the join code.');
-                      } finally {
-                        setJoining(false);
-                      }
-                    }}
-                  >
-                    <Text style={styles.signOutText}>{joining ? 'Joining…' : 'Join organization'}</Text>
-                  </Pressable>
-                  <View style={styles.divider} />
-                </>
-              )}
-              <Pressable
-                style={styles.privacyRow}
-                onPress={async () => {
-                  try {
-                    const invited = await inviteGuardian();
-                    setGuardianCode(invited.code);
-                  } catch {
-                    Alert.alert('Could not create invite');
-                  }
-                }}
-              >
-                <Text style={styles.privacyRowText}>Invite a Guardian</Text>
-              </Pressable>
-              {guardianCode && (
-                <Text style={styles.medicalDesc}>Share this one-time code: {guardianCode}</Text>
-              )}
-              {guardians.map((g) => (
-                <Row key={g.id} label={g.status} value={g.guardian?.email ?? 'Waiting to accept'} />
-              ))}
-              <View style={styles.divider} />
-              <GlassInput label="Accept a guardian invite" placeholder="CODE" value={acceptCode} onChangeText={(t) => setAcceptCode(t.toUpperCase())} autoCapitalize="characters" />
-              <Pressable
-                style={styles.privacyRow}
-                onPress={async () => {
-                  try {
-                    await acceptGuardianCode(acceptCode.trim());
-                    Alert.alert('Connected', 'You will be alerted if they trigger Emergency SOS.');
-                    setAcceptCode('');
-                  } catch (err: any) {
-                    Alert.alert('Could not accept', err?.response?.data?.message ?? 'Invalid code.');
-                  }
-                }}
-              >
-                <Text style={styles.privacyRowText}>Accept guardian code</Text>
-              </Pressable>
-            </Glass>
-
-            <Glass style={styles.detailsCard}>
-              <Text style={styles.sectionHeader}>Change password</Text>
-              <View style={styles.divider} />
-              <View style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.md, gap: spacing.md }}>
-                <GlassInput
-                  label="Current password"
-                  value={currentPassword}
-                  onChangeText={setCurrentPassword}
-                  secureTextEntry
-                  autoCapitalize="none"
-                />
-                <GlassInput
-                  label="New password"
-                  value={newPassword}
-                  onChangeText={setNewPassword}
-                  secureTextEntry
-                  autoCapitalize="none"
-                  placeholder="At least 8 characters"
-                />
-                <GlassInput
-                  label="Confirm new password"
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  secureTextEntry
-                  autoCapitalize="none"
-                />
-                {passwordMsg ? <Text style={styles.passwordOk}>{passwordMsg}</Text> : null}
-                <Pressable
-                  style={[styles.signOutBtn, { marginTop: 0 }]}
-                  onPress={handleChangePassword}
-                  disabled={passwordBusy || !currentPassword || !newPassword}
-                >
-                  <Text style={styles.signOutText}>{passwordBusy ? 'Updating…' : 'Update password'}</Text>
-                </Pressable>
-              </View>
-            </Glass>
-
-            <Glass style={styles.privacyCard}>
-              <Text style={styles.sectionHeader}>Privacy &amp; data</Text>
-              <Pressable style={styles.privacyRow} onPress={handleExport} disabled={busy !== null}>
-                <Download size={16} color={colors.indigoink} />
-                <Text style={styles.privacyRowText}>
-                  {busy === 'export' ? 'Preparing…' : 'Export my data'}
-                </Text>
-              </Pressable>
-              <View style={styles.divider} />
-              <Pressable style={styles.privacyRow} onPress={handleDeleteAccount} disabled={busy !== null}>
-                <Trash2 size={16} color="#C0433E" />
-                <Text style={[styles.privacyRowText, styles.deleteText]}>
-                  {busy === 'delete' ? 'Deleting…' : 'Delete my account'}
-                </Text>
-              </Pressable>
-            </Glass>
-
-            <Pressable style={styles.signOutBtn} onPress={handleSignOut}>
-              <Text style={styles.signOutText}>Sign out</Text>
-            </Pressable>
-          </>
-        ) : (
-          // EDIT MODE
+  const renderSheetBody = () => {
+    if (sheet === 'academic') {
+      if (isEditing) {
+        return (
           <View style={styles.editForm}>
-            <Text style={styles.sectionHeader}>Contact & Academic Info</Text>
-            <GlassInput label="Mobile Phone" value={formData.mobile} onChangeText={(t) => setFormData({...formData, mobile: t})} keyboardType="phone-pad" />
-            <GlassInput label="Roll Number" value={formData.studentNumber} onChangeText={(t) => setFormData({...formData, studentNumber: t})} />
-            <GlassInput label="Department" value={formData.department} onChangeText={(t) => setFormData({...formData, department: t})} />
-            <GlassInput label="Course" value={formData.course} onChangeText={(t) => setFormData({...formData, course: t})} />
-            <GlassInput label="Semester" value={formData.semester} onChangeText={(t) => setFormData({...formData, semester: t})} />
-            <GlassInput label="Year" value={formData.year} onChangeText={(t) => setFormData({...formData, year: t})} keyboardType="number-pad" />
-            
-            <View style={{ marginTop: spacing.sm, marginBottom: spacing.md }}>
+            <GlassInput label="Mobile Phone" value={formData.mobile} onChangeText={(t) => setFormData({ ...formData, mobile: t })} keyboardType="phone-pad" />
+            <GlassInput label="Roll Number" value={formData.studentNumber} onChangeText={(t) => setFormData({ ...formData, studentNumber: t })} />
+            <GlassInput label="Department" value={formData.department} onChangeText={(t) => setFormData({ ...formData, department: t })} />
+            <GlassInput label="Course" value={formData.course} onChangeText={(t) => setFormData({ ...formData, course: t })} />
+            <GlassInput label="Semester" value={formData.semester} onChangeText={(t) => setFormData({ ...formData, semester: t })} />
+            <GlassInput label="Year" value={formData.year} onChangeText={(t) => setFormData({ ...formData, year: t })} keyboardType="number-pad" />
+            <View style={{ marginBottom: spacing.md }}>
               <Text style={styles.label}>Residence Type</Text>
               <View style={styles.radioGroup}>
-                <Pressable style={[styles.radioOption, !formData.isHosteler && styles.radioOptionActive]} onPress={() => setFormData({...formData, isHosteler: false})}>
+                <Pressable style={[styles.radioOption, !formData.isHosteler && styles.radioOptionActive]} onPress={() => setFormData({ ...formData, isHosteler: false })}>
                   <Text style={[styles.radioText, !formData.isHosteler && styles.radioTextActive]}>Day Scholar</Text>
                 </Pressable>
-                <Pressable style={[styles.radioOption, formData.isHosteler && styles.radioOptionActive]} onPress={() => setFormData({...formData, isHosteler: true})}>
+                <Pressable style={[styles.radioOption, formData.isHosteler && styles.radioOptionActive]} onPress={() => setFormData({ ...formData, isHosteler: true })}>
                   <Text style={[styles.radioText, formData.isHosteler && styles.radioTextActive]}>Hosteler</Text>
                 </Pressable>
               </View>
             </View>
-
-            <Text style={styles.sectionHeader}>Emergency Info</Text>
-            <GlassInput label="Emergency Contact Name" value={formData.emergencyContactName} onChangeText={(t) => setFormData({...formData, emergencyContactName: t})} />
-            <GlassInput label="Emergency Phone" value={formData.emergencyContactPhone} onChangeText={(t) => setFormData({...formData, emergencyContactPhone: t})} keyboardType="phone-pad" />
-            <GlassInput label="Blood Group" value={formData.bloodGroup} onChangeText={(t) => setFormData({...formData, bloodGroup: t})} />
-
             <View style={styles.actionRow}>
               <Pressable style={[styles.actionBtn, styles.cancelBtn]} onPress={handleCancel} disabled={saving}>
                 <X size={18} color={colors.subink} />
@@ -439,14 +431,299 @@ export default function ProfileScreen() {
                 {saving ? <ActivityIndicator color="#FFF" size="small" /> : (
                   <>
                     <Check size={18} color="#FFF" />
-                    <Text style={styles.saveText}>Save Profile</Text>
+                    <Text style={styles.saveText}>Save</Text>
                   </>
                 )}
               </Pressable>
             </View>
           </View>
-        )}
+        );
+      }
+      return (
+        <>
+          <Row label="Mobile" value={profile?.mobile ?? NOT_SET} />
+          <View style={styles.divider} />
+          <Row label="Roll number" value={profile?.studentNumber ?? NOT_SET} />
+          <View style={styles.divider} />
+          <Row label="Email" value={profile?.user?.email ?? NOT_SET} />
+          <View style={styles.divider} />
+          <Row label="Department" value={profile?.department ?? NOT_SET} />
+          <View style={styles.divider} />
+          <Row label="Course" value={profile?.course ?? NOT_SET} />
+          <View style={styles.divider} />
+          <Row label="Semester" value={profile?.semester ?? NOT_SET} />
+          <View style={styles.divider} />
+          <Row label="Year" value={profile?.year?.toString() ?? NOT_SET} />
+          <View style={styles.divider} />
+          <Row label="Residence" value={profile?.isHosteler ? 'Hosteler' : 'Day Scholar'} />
+        </>
+      );
+    }
+
+    if (sheet === 'medical') {
+      if (isEditing) {
+        return (
+          <View style={styles.editForm}>
+            <Text style={[styles.medicalDesc, styles.flushText]}>Shared only when you send an emergency alert.</Text>
+            <GlassInput label="Emergency Contact Name" value={formData.emergencyContactName} onChangeText={(t) => setFormData({ ...formData, emergencyContactName: t })} />
+            <GlassInput label="Emergency Phone" value={formData.emergencyContactPhone} onChangeText={(t) => setFormData({ ...formData, emergencyContactPhone: t })} keyboardType="phone-pad" />
+            <GlassInput label="Blood Group" value={formData.bloodGroup} onChangeText={(t) => setFormData({ ...formData, bloodGroup: t })} />
+            <View style={styles.actionRow}>
+              <Pressable style={[styles.actionBtn, styles.cancelBtn]} onPress={handleCancel} disabled={saving}>
+                <X size={18} color={colors.subink} />
+                <Text style={styles.cancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable style={[styles.actionBtn, styles.saveBtn]} onPress={handleSave} disabled={saving}>
+                {saving ? <ActivityIndicator color="#FFF" size="small" /> : (
+                  <>
+                    <Check size={18} color="#FFF" />
+                    <Text style={styles.saveText}>Save</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        );
+      }
+      return (
+        <>
+          <Text style={styles.medicalDesc}>Shared only when you send an emergency alert.</Text>
+          <Row label="Emergency Contact" value={profile?.emergencyContactName ?? NOT_SET} />
+          <View style={styles.divider} />
+          <Row label="Emergency Phone" value={profile?.emergencyContactPhone ?? NOT_SET} />
+          <View style={styles.divider} />
+          <Row label="Blood group" value={profile?.bloodGroup ?? NOT_SET} />
+        </>
+      );
+    }
+
+    if (sheet === 'org') {
+      return (
+        <>
+          <Text style={styles.medicalDesc}>
+            Join your college or workplace so the committee can receive your reports.
+          </Text>
+          {orgName ? <Row label="Organization" value={orgName} /> : null}
+          {!(profile?.organizationId || profile?.college?.id) && (
+            <View style={styles.sheetSection}>
+              <GlassInput label="Join code" placeholder="DEMOJOIN" value={joinCode} onChangeText={(t) => setJoinCode(t.toUpperCase())} autoCapitalize="characters" />
+              <Pressable
+                style={[styles.sheetBtn, (joining || joinCode.length < 4) && styles.sheetBtnDisabled]}
+                disabled={joining || joinCode.length < 4}
+                onPress={handleJoinOrg}
+              >
+                <Text style={styles.sheetBtnText}>{joining ? 'Joining…' : 'Join organization'}</Text>
+              </Pressable>
+            </View>
+          )}
+        </>
+      );
+    }
+
+    if (sheet === 'guardian') {
+      return (
+        <>
+          <Text style={styles.medicalDesc}>
+            Invite someone you trust. They are alerted if you send Emergency SOS.
+          </Text>
+          <View style={styles.sheetSection}>
+            <Pressable
+              style={[styles.sheetBtn, inviting && styles.sheetBtnDisabled]}
+              disabled={inviting}
+              onPress={handleInviteGuardian}
+            >
+              <Text style={styles.sheetBtnText}>
+                {inviting ? 'Generating…' : guardianCode ? 'Generate a new code' : 'Generate invite code'}
+              </Text>
+            </Pressable>
+            <InviteCodeCard generating={inviting} code={guardianCode} />
+          </View>
+          {guardians.length > 0 && (
+            <>
+              <Text style={styles.sectionLabel}>Your guardians</Text>
+              {guardians.map((g) => (
+                <Row key={g.id} label={g.status} value={g.guardian?.email ?? 'Waiting to accept'} />
+              ))}
+            </>
+          )}
+          <View style={styles.divider} />
+          <View style={styles.sheetSection}>
+            <GlassInput label="Accept a guardian invite" placeholder="CODE" value={acceptCode} onChangeText={(t) => setAcceptCode(t.toUpperCase())} autoCapitalize="characters" />
+            <Pressable style={[styles.privacyRow, styles.flushRow]} onPress={handleAcceptGuardian}>
+              <Text style={styles.privacyRowText}>Accept guardian code</Text>
+            </Pressable>
+          </View>
+        </>
+      );
+    }
+
+    if (sheet === 'password') {
+      return (
+        <View style={styles.sheetSection}>
+          <GlassInput
+            label="Current password"
+            value={currentPassword}
+            onChangeText={setCurrentPassword}
+            secureTextEntry
+            autoCapitalize="none"
+          />
+          <GlassInput
+            label="New password"
+            value={newPassword}
+            onChangeText={setNewPassword}
+            secureTextEntry
+            autoCapitalize="none"
+            placeholder="At least 8 characters"
+          />
+          <GlassInput
+            label="Confirm new password"
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            secureTextEntry
+            autoCapitalize="none"
+          />
+          {passwordMsg ? <Text style={styles.passwordOk}>{passwordMsg}</Text> : null}
+          <Pressable
+            style={[styles.sheetBtn, (passwordBusy || !currentPassword || !newPassword) && styles.sheetBtnDisabled]}
+            onPress={handleChangePassword}
+            disabled={passwordBusy || !currentPassword || !newPassword}
+          >
+            <Text style={styles.sheetBtnText}>{passwordBusy ? 'Updating…' : 'Update password'}</Text>
+          </Pressable>
+        </View>
+      );
+    }
+
+    if (sheet === 'privacy') {
+      return (
+        <>
+          <Pressable style={styles.privacyRow} onPress={handleExport} disabled={busy !== null}>
+            <Download size={16} color={colors.indigoink} />
+            <Text style={styles.privacyRowText}>
+              {busy === 'export' ? 'Preparing…' : 'Export my data'}
+            </Text>
+          </Pressable>
+          <View style={styles.divider} />
+          <Pressable style={styles.privacyRow} onPress={handleDeleteAccount} disabled={busy !== null}>
+            <Trash2 size={16} color="#C0433E" />
+            <Text style={[styles.privacyRowText, styles.deleteText]}>
+              {busy === 'delete' ? 'Deleting…' : 'Delete my account'}
+            </Text>
+          </Pressable>
+        </>
+      );
+    }
+
+    return null;
+  };
+
+  return (
+    <Screen padded>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        <Text style={styles.screenTitle}>Profile</Text>
+
+        {error && !sheet && <Text style={styles.error}>{error}</Text>}
+
+        <View style={styles.avatarSection}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarInitials}>{initials || '?'}</Text>
+          </View>
+          <Text style={styles.name}>{name}</Text>
+          <Text style={styles.college}>{orgName ?? 'No organization yet'}</Text>
+        </View>
+
+        <Glass style={styles.menuCard}>
+          <MenuRow
+            icon={GraduationCap}
+            label="Academic & Contact Details"
+            value={profile?.department ?? undefined}
+            onPress={() => openSheet('academic')}
+          />
+          <View style={styles.menuDivider} />
+          <MenuRow
+            icon={HeartPulse}
+            label="Emergency medical info"
+            value={profile?.bloodGroup ?? undefined}
+            onPress={() => openSheet('medical')}
+          />
+          <View style={styles.menuDivider} />
+          <MenuRow
+            icon={Building2}
+            label="Organization"
+            value={orgName ?? 'Not joined'}
+            onPress={() => openSheet('org')}
+          />
+          <View style={styles.menuDivider} />
+          <MenuRow
+            icon={UserPlus}
+            label="Guardian"
+            value={guardians.length ? String(guardians.length) : 'None yet'}
+            onPress={() => openSheet('guardian')}
+          />
+          <View style={styles.menuDivider} />
+          <MenuRow
+            icon={Lock}
+            label="Change password"
+            onPress={() => openSheet('password')}
+          />
+          <View style={styles.menuDivider} />
+          <MenuRow
+            icon={Shield}
+            label="Privacy & data"
+            onPress={() => openSheet('privacy')}
+          />
+        </Glass>
+
+        <Glass style={styles.menuCard}>
+          <MenuRow
+            icon={LogOut}
+            label="Sign out"
+            destructive
+            onPress={handleSignOut}
+          />
+        </Glass>
       </ScrollView>
+
+      <Modal
+        visible={sheet !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={closeSheet}
+        statusBarTranslucent
+      >
+        <KeyboardAvoidingView
+          style={styles.modalRoot}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <Pressable style={styles.modalBackdrop} onPress={closeSheet} />
+          <View style={styles.popup}>
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle} numberOfLines={1}>
+                {sheet ? SHEET_TITLES[sheet] : ''}
+              </Text>
+              <View style={styles.sheetHeaderActions}>
+                {canEditSheet && !isEditing && (
+                  <Pressable onPress={() => setIsEditing(true)} style={styles.editButton}>
+                    <Edit2 size={16} color={colors.indigoink} />
+                    <Text style={styles.editButtonText}>Edit</Text>
+                  </Pressable>
+                )}
+                <Pressable onPress={closeSheet} style={styles.sheetClose} hitSlop={8}>
+                  <X size={18} color={colors.subink} />
+                </Pressable>
+              </View>
+            </View>
+            {error && sheet && <Text style={styles.sheetError}>{error}</Text>}
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.sheetScroll}
+            >
+              {renderSheetBody()}
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </Screen>
   );
 }
@@ -455,16 +732,11 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: spacing.xxl,
   },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.xl,
-    paddingHorizontal: 4,
-  },
   screenTitle: {
     ...typography.h1,
     fontSize: 28,
+    marginBottom: spacing.xl,
+    paddingHorizontal: 4,
   },
   editButton: {
     flexDirection: 'row',
@@ -488,6 +760,12 @@ const styles = StyleSheet.create({
     color: '#C0433E',
     textAlign: 'center',
     marginBottom: spacing.md,
+  },
+  sheetError: {
+    ...typography.caption,
+    color: '#C0433E',
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
   },
   avatarSection: {
     alignItems: 'center',
@@ -520,40 +798,193 @@ const styles = StyleSheet.create({
     marginTop: 4,
     textAlign: 'center',
   },
-  detailsCard: {
-    paddingVertical: spacing.md,
-  },
-  sectionHeader: {
-    ...typography.h3,
-    fontSize: 16,
-    color: colors.indigoink,
-    paddingHorizontal: spacing.lg,
+  menuCard: {
     paddingVertical: spacing.sm,
+    paddingHorizontal: 0,
+    marginBottom: spacing.lg,
+    overflow: 'hidden',
   },
-  medicalCard: {
-    marginTop: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  medicalHeader: {
+  menuRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
+    paddingVertical: 14,
     paddingHorizontal: spacing.lg,
+    gap: 12,
   },
-  medicalTitle: {
-    ...typography.h3,
+  menuRowPressed: {
+    backgroundColor: 'rgba(15, 118, 110, 0.06)',
+  },
+  menuIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: colors.lavenderTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuIconDanger: {
+    backgroundColor: 'rgba(192, 67, 62, 0.1)',
+  },
+  menuLabel: {
+    ...typography.body,
+    fontSize: 15,
     color: colors.ink,
+    flex: 1,
+  },
+  menuValue: {
+    ...typography.caption,
+    color: colors.mutedink,
+    maxWidth: '34%',
+    textAlign: 'right',
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    marginLeft: 64,
+  },
+  modalRoot: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(34, 35, 42, 0.45)',
+  },
+  popup: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.8)',
+    maxHeight: '82%',
+    overflow: 'hidden',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 24px 60px -20px rgba(34, 35, 42, 0.4)',
+      } as any,
+      default: {
+        shadowColor: '#22232A',
+        shadowOffset: { width: 0, height: 16 },
+        shadowOpacity: 0.28,
+        shadowRadius: 32,
+        elevation: 16,
+      },
+    }),
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(34, 35, 42, 0.06)',
+  },
+  sheetTitle: {
+    ...typography.h3,
+    fontSize: 16,
+    color: colors.ink,
+    flex: 1,
+  },
+  sheetHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sheetClose: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(34, 35, 42, 0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetScroll: {
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xl,
+  },
+  flushText: {
+    paddingHorizontal: 0,
+  },
+  flushRow: {
+    paddingHorizontal: 0,
+  },
+  sheetSection: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+  },
+  sheetBtn: {
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.6)',
+    backgroundColor: 'rgba(255, 255, 255, 0.55)',
+    alignItems: 'center',
+  },
+  sheetBtnDisabled: {
+    opacity: 0.5,
+  },
+  sheetBtnText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 15,
+    color: colors.indigoink,
+  },
+  codeCard: {
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.card,
+    backgroundColor: colors.lavenderTint,
+    borderWidth: 1,
+    borderColor: 'rgba(15, 118, 110, 0.16)',
+    alignItems: 'center',
+  },
+  codeLabel: {
+    ...typography.caption,
+    color: colors.mintInk,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  codeDigits: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 28,
+    letterSpacing: 6,
+    color: colors.indigoink,
+    textAlign: 'center',
+  },
+  codeDigitsLive: {
+    fontFamily: 'Inter_500Medium',
+    letterSpacing: 5,
+    color: colors.subink,
+  },
+  codeHint: {
+    ...typography.caption,
+    color: colors.mutedink,
+    marginTop: spacing.sm,
+    textAlign: 'center',
+  },
+  sectionLabel: {
+    ...typography.caption,
+    color: colors.mutedink,
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.sm,
+    marginBottom: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
   },
   medicalDesc: {
     ...typography.caption,
     color: colors.mutedink,
     lineHeight: 18,
     paddingHorizontal: spacing.lg,
+    marginTop: spacing.md,
     marginBottom: spacing.sm,
-  },
-  medicalContent: {
-    marginTop: 4,
   },
   row: {
     flexDirection: 'row',
@@ -576,11 +1007,8 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
-  },
-  privacyCard: {
-    marginTop: spacing.lg,
-    paddingVertical: spacing.md,
+    backgroundColor: 'rgba(34, 35, 42, 0.06)',
+    marginHorizontal: spacing.lg,
   },
   privacyRow: {
     flexDirection: 'row',
@@ -600,24 +1028,11 @@ const styles = StyleSheet.create({
   passwordOk: {
     ...typography.caption,
     color: colors.mintInk,
-  },
-  signOutBtn: {
-    marginTop: spacing.xl,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.xl,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.6)',
-    backgroundColor: 'rgba(255, 255, 255, 0.55)',
-    alignItems: 'center',
-  },
-  signOutText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 15,
-    color: colors.indigoink,
+    marginBottom: spacing.sm,
   },
   editForm: {
-    gap: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
   },
   label: {
     ...typography.body,
@@ -655,8 +1070,8 @@ const styles = StyleSheet.create({
   actionRow: {
     flexDirection: 'row',
     gap: spacing.md,
-    marginTop: spacing.xl,
-    marginBottom: spacing.xl,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
   },
   actionBtn: {
     flex: 1,
