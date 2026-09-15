@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import {
   getReportById, updateReportStatus, getEvidence, getMessages, postMessage, assignCommittee,
+  isReporterMessage,
   type ComplaintMessage,
 } from "../../services/incidentsService";
 import { getStaff } from "../../services/staffService";
@@ -361,7 +362,7 @@ export default function ReportDetail() {
             ) : (
               <div className="space-y-3 mb-4">
                 {messages.map((m) => {
-                  const fromStudent = m.authorRole === "STUDENT";
+                  const fromStudent = isReporterMessage(m.authorRole);
                   return (
                     <div
                       key={m.id}

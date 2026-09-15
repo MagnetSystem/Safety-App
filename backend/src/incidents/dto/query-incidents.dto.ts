@@ -16,6 +16,10 @@ export class QueryIncidentsDto extends PaginationDto {
   category?: string;
 
   @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
   @IsEnum(IncidentPriority)
   priority?: IncidentPriority;
 

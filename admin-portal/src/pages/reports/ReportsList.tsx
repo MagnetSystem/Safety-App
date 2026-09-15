@@ -66,9 +66,10 @@ export default function ReportsList() {
   const debouncedSearch = useDebouncedValue(search.trim(), 300);
   const [page, setPage] = useState(1);
   const status = filter === "All" ? undefined : filter;
+  const searchParam = debouncedSearch || undefined;
   const { data, isLoading: loading, isError, isFetching, refetch } = useQuery({
-    queryKey: queryKeys.reports.list({ status, search: debouncedSearch, page, pageSize: PAGE_SIZE }),
-    queryFn: () => getReports({ status, search: debouncedSearch, page, pageSize: PAGE_SIZE }),
+    queryKey: queryKeys.reports.list({ status, search: searchParam, page, pageSize: PAGE_SIZE }),
+    queryFn: () => getReports({ status, search: searchParam, page, pageSize: PAGE_SIZE }),
     placeholderData: keepPreviousData,
   });
   const reports = data?.items ?? [];

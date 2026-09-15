@@ -20,6 +20,7 @@ import { queryKeys } from "../../lib/queryKeys";
 import Pagination from "../../components/Pagination";
 import TableSkeleton from "../../components/TableSkeleton";
 import PasswordDialog from "../../components/PasswordDialog";
+import CredentialsDialog from "../../components/CredentialsDialog";
 
 const PAGE_SIZE = 20;
 
@@ -55,6 +56,7 @@ export default function Team() {
   const [resetTarget, setResetTarget] = useState<StaffMember | null>(null);
   const [resetError, setResetError] = useState("");
   const [resetBusy, setResetBusy] = useState(false);
+  const [credentials, setCredentials] = useState<{ title: string; email: string; password: string } | null>(null);
 
   const { data, isLoading: loading, isError, refetch } = useQuery({
     queryKey: staffKey,
@@ -72,8 +74,13 @@ export default function Team() {
 
   const createMutation = useMutation({
     mutationFn: createStaff,
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       setShowForm(false);
+      setCredentials({
+        title: `${variables.orgRole === "ADMIN" ? "Admin" : "Staff"} account created`,
+        email: variables.email,
+        password: variables.password,
+      });
       setForm(EMPTY_FORM);
       queryClient.invalidateQueries({ queryKey: queryKeys.staff.all });
     },
@@ -124,6 +131,11 @@ export default function Team() {
     setResetError("");
     try {
       await resetStaffPassword(resetTarget.id, newPassword);
+      setCredentials({
+        title: "Password reset",
+        email: resetTarget.user.email,
+        password: newPassword,
+      });
       setResetTarget(null);
     } catch {
       setResetError("Could not reset password.");
@@ -285,6 +297,15 @@ export default function Team() {
       </div>
 
       <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
+
+      {credentials && (
+        <CredentialsDialog
+          title={credentials.title}
+          email={credentials.email}
+          password={credentials.password}
+          onClose={() => setCredentials(null)}
+        />
+      )}
 
       <PasswordDialog
         open={!!resetTarget}

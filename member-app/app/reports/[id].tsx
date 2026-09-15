@@ -7,7 +7,7 @@ import { MapPin, FileCheck2, Paperclip, Send } from 'lucide-react-native';
 import { Screen } from '../../src/components/PhoneFrame';
 import { Glass, ScreenHeader, StatusPill, EmptyState, LoadingCards } from '../../src/components/ui-kit';
 import {
-  getReportById, getMessages, postMessage, type ComplaintMessage,
+  getReportById, getMessages, postMessage, isReporterMessage, type ComplaintMessage,
 } from '../../src/services/incidentsService';
 import { getEvidence } from '../../src/services/evidenceService';
 import { categoryLabel, statusLabel, type EvidenceItem, type Report } from '../../src/types';
@@ -173,7 +173,7 @@ export default function ReportDetailScreen() {
           ) : (
             <View style={styles.messageList}>
               {messages.map((m) => {
-                const mine = m.authorRole === 'STUDENT';
+                const mine = isReporterMessage(m.authorRole);
                 return (
                   <View key={m.id} style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleThem]}>
                     <Text style={styles.bubbleAuthor}>{mine ? 'You' : 'Committee'}</Text>

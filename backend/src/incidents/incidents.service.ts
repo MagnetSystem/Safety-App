@@ -225,6 +225,16 @@ export class IncidentsService {
         lte: query.to ? new Date(query.to) : undefined,
       };
     }
+    if (query.search) {
+      where.AND = [
+        {
+          OR: [
+            { code: { contains: query.search, mode: 'insensitive' } },
+            { description: { contains: query.search, mode: 'insensitive' } },
+          ],
+        },
+      ];
+    }
 
     const [items, total] = await Promise.all([
       this.prisma.incident.findMany({

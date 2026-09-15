@@ -56,7 +56,9 @@ export class MembersService {
         { name: { contains: query.search, mode: 'insensitive' } },
         { memberNumber: { contains: query.search, mode: 'insensitive' } },
         { mobile: { contains: query.search, mode: 'insensitive' } },
+        { department: { contains: query.search, mode: 'insensitive' } },
         { user: { email: { contains: query.search, mode: 'insensitive' } } },
+        { assignedDepartment: { name: { contains: query.search, mode: 'insensitive' } } },
       ];
     }
 

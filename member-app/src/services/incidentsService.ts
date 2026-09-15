@@ -42,13 +42,18 @@ export const createComplaint = async (input: CreateComplaintInput) => {
   return data;
 };
 
+export type MessageAuthorRole = 'MEMBER' | 'GUARDIAN' | 'STAFF' | 'ADMIN' | 'OWNER' | 'SUPPORT';
+
 export interface ComplaintMessage {
   id: string;
   body: string;
-  authorRole: 'STUDENT' | 'COLLEGE_ADMIN' | 'SUPER_ADMIN';
+  authorRole: MessageAuthorRole;
   authorId: string | null;
   createdAt: string;
 }
+
+export const isReporterMessage = (authorRole: MessageAuthorRole) =>
+  authorRole === 'MEMBER' || authorRole === 'GUARDIAN';
 
 export const getMessages = async (complaintId: string) => {
   const { data } = await api.get<ComplaintMessage[]>(`/incidents/${complaintId}/messages`);
