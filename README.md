@@ -6,7 +6,7 @@ Welcome to the **Safety Platform** repository. This is a multi-tenant safety pro
 
 ## 🏗️ Architecture & Structure
 
-This repository is structured as a **Monorepo**, housing the following core services:
+This repository is structureds as a **Monorepo**, housing the following core services:
 
 - **`/backend`** - The core API and business logic.
   - Framework: NestJS (TypeScript)
