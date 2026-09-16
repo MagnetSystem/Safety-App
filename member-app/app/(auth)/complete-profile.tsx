@@ -1,53 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Switch } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
-import { GlassInput, ScreenHeader } from '../../src/components/ui-kit';
+import { ScreenHeader } from '../../src/components/ui-kit';
+import { ProfileFieldInput } from '../../src/components/ProfileFieldInput';
 import { Screen } from '../../src/components/PhoneFrame';
-import { colors, radius, spacing, typography, shadows } from '../../src/constants/theme';
+import { colors, spacing, typography, shadows } from '../../src/constants/theme';
 import { getMyProfile, updateMyProfile } from '../../src/services/membersService';
+import { isValidIsoDate, buildProfilePatch } from '../../src/lib/profileFields';
 import { Check } from 'lucide-react-native';
 import type { ProfileFieldDef } from '../../src/types';
-
-const COLUMN_KEYS = new Set([
-  'name', 'mobile', 'dateOfBirth', 'gender', 'memberNumber', 'studentNumber',
-  'department', 'course', 'semester', 'year', 'section', 'isHosteler',
-  'hostelAddress', 'hostelRoomNumber', 'permanentAddress',
-  'emergencyContactName', 'emergencyContactPhone', 'bloodGroup',
-  'medicalConditions', 'allergies', 'disability',
-]);
 
 const FALLBACK_FIELDS: ProfileFieldDef[] = [
   { key: 'mobile', label: 'Mobile number', type: 'tel', group: 'identity', required: true },
   { key: 'emergencyContactName', label: 'Emergency contact name', type: 'text', group: 'emergency', required: true },
   { key: 'emergencyContactPhone', label: 'Emergency contact phone', type: 'tel', group: 'emergency', required: true },
 ];
-
-/** The backend requires an ISO 8601 date (YYYY-MM-DD) — anything else is rejected. */
-function isValidIsoDate(value: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const d = new Date(`${value}T00:00:00Z`);
-  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
-}
-
-/** As the user types digits, auto-inserts dashes so the result is always YYYY-MM-DD. */
-function maskIsoDate(text: string): string {
-  const digits = text.replace(/\D/g, '').slice(0, 8);
-  return [digits.slice(0, 4), digits.slice(4, 6), digits.slice(6, 8)].filter(Boolean).join('-');
-}
-
-function fieldHint(field: ProfileFieldDef): string | undefined {
-  if (field.help) return field.help;
-  switch (field.type) {
-    case 'date':
-      return 'Format: YYYY-MM-DD, e.g. 2003-05-14';
-    case 'tel':
-      return 'Numbers only, e.g. 9876543210';
-    case 'email':
-      return 'e.g. name@example.com';
-    default:
-      return undefined;
-  }
-}
 
 export default function CompleteProfileScreen() {
   const router = useRouter();
@@ -97,23 +64,7 @@ export default function CompleteProfileScreen() {
     setError(null);
     setSubmitting(true);
     try {
-      const columnPatch: Record<string, unknown> = {};
-      const profile: Record<string, unknown> = {};
-      for (const f of fields) {
-        const raw = (values[f.key] ?? '').trim();
-        let parsed: unknown = raw;
-        if (f.type === 'number') parsed = raw ? Number(raw) : undefined;
-        if (f.type === 'boolean') parsed = raw === 'true' || raw === '1';
-        if (f.key === 'memberNumber') {
-          // The backend column is `studentNumber` — sending `memberNumber` too gets rejected
-          // as an unknown property, so map it and skip the generic column/profile split below.
-          columnPatch.studentNumber = raw;
-        } else if (COLUMN_KEYS.has(f.key)) {
-          columnPatch[f.key] = parsed;
-        } else {
-          profile[f.key] = parsed;
-        }
-      }
+      const { columnPatch, profile } = buildProfilePatch(fields, values);
       await updateMyProfile({ ...columnPatch, profile } as any);
       router.replace('/(tabs)/home');
     } catch (err: any) {
@@ -150,7 +101,7 @@ export default function CompleteProfileScreen() {
             <View key={group} style={{ gap: spacing.md }}>
               <Text style={styles.sectionTitle}>{group.replace(/_/g, ' ')}</Text>
               {groupFields.map((f) => (
-                <FieldInput key={f.key} field={f} value={values[f.key] ?? ''} onChange={(v) => setValue(f.key, v)} />
+                <ProfileFieldInput key={f.key} field={f} value={values[f.key] ?? ''} onChange={(v) => setValue(f.key, v)} />
               ))}
             </View>
           ))}
@@ -177,97 +128,10 @@ export default function CompleteProfileScreen() {
   );
 }
 
-function FieldInput({
-  field,
-  value,
-  onChange,
-}: {
-  field: ProfileFieldDef;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  const label = `${field.label}${field.required ? ' *' : ''}`;
-  if (field.type === 'boolean') {
-    return (
-      <View style={styles.switchRow}>
-        <Text style={styles.switchLabel}>{label}</Text>
-        <Switch value={value === 'true'} onValueChange={(v) => onChange(v ? 'true' : 'false')} />
-      </View>
-    );
-  }
-  if (field.type === 'select' && field.options?.length) {
-    return (
-      <View>
-        <Text style={styles.switchLabel}>{label}</Text>
-        <View style={styles.radioGroup}>
-          {field.options.map((opt) => (
-            <Pressable
-              key={opt}
-              onPress={() => onChange(opt)}
-              style={[styles.radioOption, value === opt && styles.radioOptionActive]}
-            >
-              <Text style={[styles.radioText, value === opt && styles.radioTextActive]}>{opt}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
-    );
-  }
-  const hint = fieldHint(field);
-
-  if (field.type === 'date') {
-    const invalid = value.length > 0 && !isValidIsoDate(value);
-    return (
-      <View>
-        <GlassInput
-          label={label}
-          value={value}
-          onChangeText={(text) => onChange(maskIsoDate(text))}
-          placeholder="YYYY-MM-DD"
-          keyboardType="number-pad"
-          maxLength={10}
-        />
-        <Text style={[styles.hint, invalid && styles.hintError]}>
-          {invalid ? 'Enter a valid date as YYYY-MM-DD, e.g. 2003-05-14' : hint}
-        </Text>
-      </View>
-    );
-  }
-
-  return (
-    <View>
-      <GlassInput
-        label={label}
-        value={value}
-        onChangeText={onChange}
-        placeholder={field.help || field.label}
-        keyboardType={field.type === 'tel' ? 'phone-pad' : field.type === 'number' ? 'number-pad' : 'default'}
-      />
-      {hint && <Text style={styles.hint}>{hint}</Text>}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   scrollContent: { paddingBottom: spacing.xxl },
   form: { marginTop: spacing.xl, gap: spacing.lg },
   sectionTitle: { ...typography.h3, fontSize: 16, color: colors.indigoink, textTransform: 'capitalize' },
-  switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  switchLabel: { ...typography.body, fontSize: 14, color: colors.subink, marginBottom: spacing.sm },
-  hint: { ...typography.caption, color: colors.mutedink, marginTop: 4, marginLeft: 4 },
-  hintError: { color: '#C0433E' },
-  radioGroup: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  radioOption: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: 'rgba(255,255,255,0.6)',
-    borderRadius: radius.input,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  radioOptionActive: { backgroundColor: colors.lavenderTint, borderColor: colors.lavender },
-  radioText: { ...typography.body, color: colors.subink },
-  radioTextActive: { color: colors.indigoink, fontFamily: 'Inter_500Medium' },
   error: { ...typography.caption, color: '#C0433E', textAlign: 'center' },
   button: {
     flexDirection: 'row',

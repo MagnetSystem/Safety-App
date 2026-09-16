@@ -23,7 +23,7 @@ import {
   X,
   Download,
   Trash2,
-  GraduationCap,
+  IdCard,
   Building2,
   UserPlus,
   Lock,
@@ -35,12 +35,14 @@ import {
 } from 'lucide-react-native';
 import { Screen } from '../../src/components/PhoneFrame';
 import { Glass, GlassInput } from '../../src/components/ui-kit';
+import { ProfileFieldInput } from '../../src/components/ProfileFieldInput';
 import {
   getMyProfile, updateMyProfile, exportMyData, deleteMyAccount, joinOrganization,
 } from '../../src/services/membersService';
 import { changePassword } from '../../src/services/authService';
 import { inviteGuardian, listMyGuardians, acceptGuardianCode } from '../../src/services/guardiansService';
-import type { StudentProfile } from '../../src/types';
+import { buildProfilePatch, isValidIsoDate, valuesFromProfile } from '../../src/lib/profileFields';
+import type { ProfileFieldDef, StudentProfile } from '../../src/types';
 import { colors, radius, spacing, typography } from '../../src/constants/theme';
 import { useAuth } from '../../src/store/AuthContext';
 import { tapFeedback, successFeedback } from '../../src/services/haptics';
@@ -91,7 +93,7 @@ function MenuRow({
 }
 
 const SHEET_TITLES: Record<ProfileSheet, string> = {
-  academic: 'Academic & Contact Details',
+  academic: 'Role & contact details',
   medical: 'Emergency medical info',
   org: 'Organization',
   guardian: 'Guardian',
@@ -158,6 +160,12 @@ function InviteCodeCard({ generating, code }: { generating: boolean; code: strin
 
 const NOT_SET = 'Not set';
 
+function formatDetailValue(field: ProfileFieldDef, raw?: string): string {
+  if (!raw) return NOT_SET;
+  if (field.type === 'boolean') return raw === 'true' ? 'Yes' : 'No';
+  return raw;
+}
+
 export default function ProfileScreen() {
   const router = useRouter();
   const { section } = useLocalSearchParams<{ section?: string }>();
@@ -178,30 +186,27 @@ export default function ProfileScreen() {
   const [saving, setSaving] = useState(false);
 
   const [formData, setFormData] = useState({
-    mobile: '',
-    studentNumber: '',
-    department: '',
-    course: '',
-    semester: '',
-    year: '',
-    isHosteler: false,
     bloodGroup: '',
     emergencyContactName: '',
     emergencyContactPhone: '',
   });
 
+  // The role/contact fields shown here depend on the organization's industry —
+  // e.g. Roll number + Course for education, Employee ID + Job title for corporate,
+  // Resident ID + Unit for care homes. Medical/emergency fields stay in their own sheet.
+  const [detailFields, setDetailFields] = useState<ProfileFieldDef[]>([]);
+  const [detailValues, setDetailValues] = useState<Record<string, string>>({});
+  const setDetailValue = (key: string, value: string) => setDetailValues((prev) => ({ ...prev, [key]: value }));
+
   const [guardians, setGuardians] = useState<{ id: string; status: string; guardian: { email: string } | null }[]>([]);
 
   const applyProfile = useCallback((p: StudentProfile) => {
     setProfile(p);
+    const defs = p.organization?.organizationType?.memberFields ?? p.organization?.settings?.profileFieldDefs ?? [];
+    const usable = defs.filter((f) => f.key !== 'name' && f.group !== 'medical' && f.group !== 'emergency' && f.group !== 'organization');
+    setDetailFields(usable);
+    setDetailValues(valuesFromProfile(usable, p as unknown as Record<string, unknown>));
     setFormData({
-      mobile: p.mobile || '',
-      studentNumber: p.studentNumber || '',
-      department: p.department || '',
-      course: p.course || '',
-      semester: p.semester || '',
-      year: p.year?.toString() || '',
-      isHosteler: p.isHosteler || false,
       bloodGroup: p.bloodGroup || '',
       emergencyContactName: p.emergencyContactName || '',
       emergencyContactPhone: p.emergencyContactPhone || '',
@@ -326,18 +331,31 @@ export default function ProfileScreen() {
     );
   };
 
+  const detailsValid = detailFields.every((f) => {
+    const value = (detailValues[f.key] ?? '').trim();
+    if (f.required && value.length === 0) return false;
+    if (f.type === 'date' && value && !isValidIsoDate(value)) return false;
+    return true;
+  });
+
   const handleSave = async () => {
+    if (sheet === 'academic' && !detailsValid) return;
     setSaving(true);
     setError(null);
     try {
-      const updated = await updateMyProfile({
-        ...formData,
-        year: formData.year ? parseInt(formData.year, 10) : undefined,
-      });
+      const payload =
+        sheet === 'academic'
+          ? (() => {
+              const { columnPatch, profile: extra } = buildProfilePatch(detailFields, detailValues);
+              return { ...columnPatch, profile: extra };
+            })()
+          : { ...formData };
+      const updated = await updateMyProfile(payload as any);
       applyProfile(updated);
       setIsEditing(false);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Could not save profile');
+      const raw = err.response?.data?.message;
+      setError((Array.isArray(raw) ? raw.join('\n') : raw) || 'Could not save profile');
     } finally {
       setSaving(false);
     }
@@ -408,35 +426,23 @@ export default function ProfileScreen() {
     .toUpperCase();
   const orgName = profile?.college?.name ?? profile?.organization?.name;
   const canEditSheet = sheet === 'academic' || sheet === 'medical';
+  const detailsPreviewField = detailFields.find((f) => f.group === 'role' && detailValues[f.key]) ?? detailFields.find((f) => detailValues[f.key]);
+  const detailsPreview = detailsPreviewField ? detailValues[detailsPreviewField.key] : undefined;
 
   const renderSheetBody = () => {
     if (sheet === 'academic') {
       if (isEditing) {
         return (
           <View style={styles.editForm}>
-            <GlassInput label="Mobile Phone" value={formData.mobile} onChangeText={(t) => setFormData({ ...formData, mobile: t })} keyboardType="phone-pad" />
-            <GlassInput label="Roll Number" value={formData.studentNumber} onChangeText={(t) => setFormData({ ...formData, studentNumber: t })} />
-            <GlassInput label="Department" value={formData.department} onChangeText={(t) => setFormData({ ...formData, department: t })} />
-            <GlassInput label="Course" value={formData.course} onChangeText={(t) => setFormData({ ...formData, course: t })} />
-            <GlassInput label="Semester" value={formData.semester} onChangeText={(t) => setFormData({ ...formData, semester: t })} />
-            <GlassInput label="Year" value={formData.year} onChangeText={(t) => setFormData({ ...formData, year: t })} keyboardType="number-pad" />
-            <View style={{ marginBottom: spacing.md }}>
-              <Text style={styles.label}>Residence Type</Text>
-              <View style={styles.radioGroup}>
-                <Pressable style={[styles.radioOption, !formData.isHosteler && styles.radioOptionActive]} onPress={() => setFormData({ ...formData, isHosteler: false })}>
-                  <Text style={[styles.radioText, !formData.isHosteler && styles.radioTextActive]}>Day Scholar</Text>
-                </Pressable>
-                <Pressable style={[styles.radioOption, formData.isHosteler && styles.radioOptionActive]} onPress={() => setFormData({ ...formData, isHosteler: true })}>
-                  <Text style={[styles.radioText, formData.isHosteler && styles.radioTextActive]}>Hosteler</Text>
-                </Pressable>
-              </View>
-            </View>
+            {detailFields.map((f) => (
+              <ProfileFieldInput key={f.key} field={f} value={detailValues[f.key] ?? ''} onChange={(v) => setDetailValue(f.key, v)} />
+            ))}
             <View style={styles.actionRow}>
               <Pressable style={[styles.actionBtn, styles.cancelBtn]} onPress={handleCancel} disabled={saving}>
                 <X size={18} color={colors.subink} />
                 <Text style={styles.cancelText}>Cancel</Text>
               </Pressable>
-              <Pressable style={[styles.actionBtn, styles.saveBtn]} onPress={handleSave} disabled={saving}>
+              <Pressable style={[styles.actionBtn, styles.saveBtn, !detailsValid && styles.actionBtnDisabled]} onPress={handleSave} disabled={saving || !detailsValid}>
                 {saving ? <ActivityIndicator color="#FFF" size="small" /> : (
                   <>
                     <Check size={18} color="#FFF" />
@@ -450,21 +456,13 @@ export default function ProfileScreen() {
       }
       return (
         <>
-          <Row label="Mobile" value={profile?.mobile ?? NOT_SET} />
-          <View style={styles.divider} />
-          <Row label="Roll number" value={profile?.studentNumber ?? NOT_SET} />
-          <View style={styles.divider} />
           <Row label="Email" value={profile?.user?.email ?? NOT_SET} />
-          <View style={styles.divider} />
-          <Row label="Department" value={profile?.department ?? NOT_SET} />
-          <View style={styles.divider} />
-          <Row label="Course" value={profile?.course ?? NOT_SET} />
-          <View style={styles.divider} />
-          <Row label="Semester" value={profile?.semester ?? NOT_SET} />
-          <View style={styles.divider} />
-          <Row label="Year" value={profile?.year?.toString() ?? NOT_SET} />
-          <View style={styles.divider} />
-          <Row label="Residence" value={profile?.isHosteler ? 'Hosteler' : 'Day Scholar'} />
+          {detailFields.map((f) => (
+            <React.Fragment key={f.key}>
+              <View style={styles.divider} />
+              <Row label={f.label} value={formatDetailValue(f, detailValues[f.key])} />
+            </React.Fragment>
+          ))}
         </>
       );
     }
@@ -645,9 +643,9 @@ export default function ProfileScreen() {
         <Text style={styles.groupTitle}>Personal details</Text>
         <Glass style={styles.menuCard}>
           <MenuRow
-            icon={GraduationCap}
-            label="Academic & Contact Details"
-            value={profile?.department ?? undefined}
+            icon={IdCard}
+            label="Role & contact details"
+            value={detailsPreview}
             onPress={() => openSheet('academic')}
           />
         </Glass>
@@ -1077,39 +1075,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
   },
-  label: {
-    ...typography.body,
-    fontSize: 14,
-    color: colors.subink,
-    marginBottom: spacing.sm,
-    paddingHorizontal: 4,
-  },
-  radioGroup: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  radioOption: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
-    borderRadius: radius.input,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  radioOptionActive: {
-    backgroundColor: colors.lavenderTint,
-    borderColor: colors.lavender,
-  },
-  radioText: {
-    ...typography.body,
-    color: colors.subink,
-  },
-  radioTextActive: {
-    color: colors.indigoink,
-    fontFamily: 'Inter_500Medium',
-  },
   actionRow: {
     flexDirection: 'row',
     gap: spacing.md,
@@ -1132,6 +1097,9 @@ const styles = StyleSheet.create({
   },
   saveBtn: {
     backgroundColor: colors.indigoink,
+  },
+  actionBtnDisabled: {
+    opacity: 0.5,
   },
   cancelText: {
     ...typography.body,
