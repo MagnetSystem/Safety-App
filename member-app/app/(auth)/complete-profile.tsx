@@ -22,6 +22,33 @@ const FALLBACK_FIELDS: ProfileFieldDef[] = [
   { key: 'emergencyContactPhone', label: 'Emergency contact phone', type: 'tel', group: 'emergency', required: true },
 ];
 
+/** The backend requires an ISO 8601 date (YYYY-MM-DD) — anything else is rejected. */
+function isValidIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const d = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
+}
+
+/** As the user types digits, auto-inserts dashes so the result is always YYYY-MM-DD. */
+function maskIsoDate(text: string): string {
+  const digits = text.replace(/\D/g, '').slice(0, 8);
+  return [digits.slice(0, 4), digits.slice(4, 6), digits.slice(6, 8)].filter(Boolean).join('-');
+}
+
+function fieldHint(field: ProfileFieldDef): string | undefined {
+  if (field.help) return field.help;
+  switch (field.type) {
+    case 'date':
+      return 'Format: YYYY-MM-DD, e.g. 2003-05-14';
+    case 'tel':
+      return 'Numbers only, e.g. 9876543210';
+    case 'email':
+      return 'e.g. name@example.com';
+    default:
+      return undefined;
+  }
+}
+
 export default function CompleteProfileScreen() {
   const router = useRouter();
   const [fields, setFields] = useState<ProfileFieldDef[]>(FALLBACK_FIELDS);
@@ -57,7 +84,12 @@ export default function CompleteProfileScreen() {
   const setValue = (key: string, value: string) => setValues((prev) => ({ ...prev, [key]: value }));
 
   const canSubmit = useMemo(() => {
-    return fields.every((f) => !f.required || (values[f.key] ?? '').toString().trim().length > 0);
+    return fields.every((f) => {
+      const value = (values[f.key] ?? '').toString().trim();
+      if (f.required && value.length === 0) return false;
+      if (f.type === 'date' && value && !isValidIsoDate(value)) return false;
+      return true;
+    });
   }, [fields, values]);
 
   const handleSubmit = async () => {
@@ -72,14 +104,21 @@ export default function CompleteProfileScreen() {
         let parsed: unknown = raw;
         if (f.type === 'number') parsed = raw ? Number(raw) : undefined;
         if (f.type === 'boolean') parsed = raw === 'true' || raw === '1';
-        if (f.key === 'memberNumber') columnPatch.studentNumber = raw;
-        if (COLUMN_KEYS.has(f.key)) columnPatch[f.key] = parsed;
-        else profile[f.key] = parsed;
+        if (f.key === 'memberNumber') {
+          // The backend column is `studentNumber` — sending `memberNumber` too gets rejected
+          // as an unknown property, so map it and skip the generic column/profile split below.
+          columnPatch.studentNumber = raw;
+        } else if (COLUMN_KEYS.has(f.key)) {
+          columnPatch[f.key] = parsed;
+        } else {
+          profile[f.key] = parsed;
+        }
       }
       await updateMyProfile({ ...columnPatch, profile } as any);
       router.replace('/(tabs)/home');
     } catch (err: any) {
-      setError(err.response?.data?.message || err.message || 'Could not save your profile details.');
+      const raw = err.response?.data?.message;
+      setError((Array.isArray(raw) ? raw.join('\n') : raw) || err.message || 'Could not save your profile details.');
     } finally {
       setSubmitting(false);
     }
@@ -174,14 +213,38 @@ function FieldInput({
       </View>
     );
   }
+  const hint = fieldHint(field);
+
+  if (field.type === 'date') {
+    const invalid = value.length > 0 && !isValidIsoDate(value);
+    return (
+      <View>
+        <GlassInput
+          label={label}
+          value={value}
+          onChangeText={(text) => onChange(maskIsoDate(text))}
+          placeholder="YYYY-MM-DD"
+          keyboardType="number-pad"
+          maxLength={10}
+        />
+        <Text style={[styles.hint, invalid && styles.hintError]}>
+          {invalid ? 'Enter a valid date as YYYY-MM-DD, e.g. 2003-05-14' : hint}
+        </Text>
+      </View>
+    );
+  }
+
   return (
-    <GlassInput
-      label={label}
-      value={value}
-      onChangeText={onChange}
-      placeholder={field.help || field.label}
-      keyboardType={field.type === 'tel' ? 'phone-pad' : field.type === 'number' ? 'number-pad' : 'default'}
-    />
+    <View>
+      <GlassInput
+        label={label}
+        value={value}
+        onChangeText={onChange}
+        placeholder={field.help || field.label}
+        keyboardType={field.type === 'tel' ? 'phone-pad' : field.type === 'number' ? 'number-pad' : 'default'}
+      />
+      {hint && <Text style={styles.hint}>{hint}</Text>}
+    </View>
   );
 }
 
@@ -191,6 +254,8 @@ const styles = StyleSheet.create({
   sectionTitle: { ...typography.h3, fontSize: 16, color: colors.indigoink, textTransform: 'capitalize' },
   switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   switchLabel: { ...typography.body, fontSize: 14, color: colors.subink, marginBottom: spacing.sm },
+  hint: { ...typography.caption, color: colors.mutedink, marginTop: 4, marginLeft: 4 },
+  hintError: { color: '#C0433E' },
   radioGroup: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   radioOption: {
     paddingVertical: 10,

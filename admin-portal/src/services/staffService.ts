@@ -18,6 +18,11 @@ export const getStaff = async (params: { page?: number; pageSize?: number; organ
   return data;
 };
 
+export const getStaffById = async (id: string) => {
+  const { data } = await api.get<StaffMember>(`/staff/${id}`);
+  return data;
+};
+
 export const createStaff = async (input: CreateStaffInput) => {
   const { data } = await api.post<StaffMember>('/staff', input);
   return data;

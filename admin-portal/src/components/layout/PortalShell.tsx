@@ -12,6 +12,9 @@ export default function PortalShell({ support = false }: { support?: boolean }) 
   const { user } = useAuth();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem("sidebar-collapsed") === "1"; } catch { return false; }
+  });
   const dialogRef = useRef<HTMLDialogElement>(null);
   const contentRef = useRef<HTMLElement>(null);
   const unread = useUnreadNotificationCount();
@@ -26,12 +29,16 @@ export default function PortalShell({ support = false }: { support?: boolean }) 
     contentRef.current?.scrollTo({ top: 0 });
     document.title = `${title} · Safety Platform`;
   }, [location.pathname, title]);
+  useEffect(() => {
+    try { localStorage.setItem("sidebar-collapsed", collapsed ? "1" : "0"); } catch { /* ignore */ }
+  }, [collapsed]);
+  const toggleCollapsed = () => setCollapsed(value => !value);
   const navigation = (mobile: boolean) => support
-    ? <SuperAdminSidebar onNavigate={mobile ? () => setMobileOpen(false) : undefined} />
-    : <Sidebar onNavigate={mobile ? () => setMobileOpen(false) : undefined} />;
+    ? <SuperAdminSidebar onNavigate={mobile ? () => setMobileOpen(false) : undefined} collapsed={mobile ? false : collapsed} onToggleCollapse={mobile ? undefined : toggleCollapsed} />
+    : <Sidebar onNavigate={mobile ? () => setMobileOpen(false) : undefined} collapsed={mobile ? false : collapsed} onToggleCollapse={mobile ? undefined : toggleCollapsed} />;
   return <div className="portal-shell flex h-dvh overflow-hidden">
     <a href="#main-content" className="skip-link">Skip to content</a>
-    <aside className="hidden w-[248px] shrink-0 bg-[#173e35] px-4 py-6 lg:block">{navigation(false)}</aside>
+    <aside className={"hidden shrink-0 bg-[#173e35] py-6 transition-[width] duration-200 lg:block " + (collapsed ? "w-[76px] px-2" : "w-[248px] px-4")}>{navigation(false)}</aside>
     <div className="flex min-w-0 flex-1 flex-col">
       <header className="portal-header flex h-[72px] shrink-0 items-center justify-between gap-3 border-b border-border px-4 sm:px-7 lg:px-9">
         <div className="flex min-w-0 items-center gap-3">

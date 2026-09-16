@@ -11,3 +11,7 @@ export function reportsListPath(role: Role): string {
 export function reportPath(role: Role, id: string): string {
   return `${reportsListPath(role)}/${id}`;
 }
+
+export function teamMemberPath(id: string): string {
+  return `/team/${id}`;
+}

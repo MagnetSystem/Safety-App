@@ -1,6 +1,7 @@
 import QueryError from '../../components/QueryError';
 import Modal from '../../components/Modal';
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Plus, Search, Shield, UserCog, X } from "lucide-react";
 import {
@@ -16,6 +17,7 @@ import { useAuth } from "../../context/auth";
 import type { OrgRole, StaffMember } from "../../types/organization";
 import { canAddOrgAdmins, canManageOrgTeam } from "../../types/user";
 import { queryKeys } from "../../lib/queryKeys";
+import { teamMemberPath } from "../../lib/paths";
 
 import Pagination from "../../components/Pagination";
 import TableSkeleton from "../../components/TableSkeleton";
@@ -240,12 +242,12 @@ export default function Team() {
                 {filtered.map((m) => (
                   <tr key={m.id} className="border-b border-border last:border-0">
                     <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
+                      <Link to={teamMemberPath(m.id)} className="flex items-center gap-3">
                         <div className="h-9 w-9 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center shrink-0">
                           <UserCog size={16} />
                         </div>
-                        <span className="font-medium text-slate-900">{m.name}</span>
-                      </div>
+                        <span className="font-medium text-slate-900 hover:underline">{m.name}</span>
+                      </Link>
                     </td>
                     <td className="px-5 py-4 hidden sm:table-cell text-slate-500">{m.user.email}</td>
                     <td className="px-5 py-4">
@@ -306,6 +308,7 @@ export default function Team() {
           onClose={() => setCredentials(null)}
         />
       )}
+
 
       <PasswordDialog
         open={!!resetTarget}

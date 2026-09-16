@@ -77,6 +77,16 @@ export interface Paginated<T> {
   pageSize: number;
 }
 
+export const STATUS_TABS: { label: string; value: ComplaintStatus | "All" }[] = [
+  { label: "All", value: "All" },
+  { label: "Submitted", value: "SUBMITTED" },
+  { label: "Under Review", value: "UNDER_REVIEW" },
+  { label: "Investigating", value: "INVESTIGATING" },
+  { label: "More Info", value: "MORE_INFO_REQUESTED" },
+  { label: "Resolved", value: "RESOLVED" },
+  { label: "Closed", value: "CLOSED" },
+];
+
 export function formatEnum(value: string): string {
   return value
     .toLowerCase()

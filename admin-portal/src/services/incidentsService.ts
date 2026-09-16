@@ -6,6 +6,7 @@ export interface QueryComplaintsParams {
   pageSize?: number;
   status?: ComplaintStatus;
   search?: string;
+  assignedToUserId?: string;
 }
 
 export const getReports = async (params: QueryComplaintsParams = {}) => {

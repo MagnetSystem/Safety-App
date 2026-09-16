@@ -25,6 +25,7 @@ const Departments = lazy(() => import('../pages/departments/Departments'));
 const OrganizationTypes = lazy(() => import('../pages/super-admin/OrganizationTypes'));
 const Settings = lazy(() => import('../pages/settings/Settings'));
 const Team = lazy(() => import('../pages/team/Team'));
+const StaffDetail = lazy(() => import('../pages/team/StaffDetail'));
 const SupportSettings = lazy(() => import('../pages/super-admin/SupportSettings'));
 
 function ProtectedRoute({ children, portal }: { children: React.ReactNode; portal: 'org' | 'support' }) {
@@ -98,6 +99,7 @@ const AppRoutes = () => {
         <Route path="members" element={<ManageRoute><Members /></ManageRoute>} />
         <Route path="students" element={<Navigate to="/members" replace />} />
         <Route path="team" element={<ManageRoute><Team /></ManageRoute>} />
+        <Route path="team/:id" element={<ManageRoute><StaffDetail /></ManageRoute>} />
         <Route path="staff" element={<Navigate to="/team" replace />} />
         <Route path="departments" element={<ManageRoute><Departments /></ManageRoute>} />
         <Route path="search" element={<Search />} />

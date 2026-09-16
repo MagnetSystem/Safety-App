@@ -4,8 +4,8 @@ export const queryKeys = {
 
   reports: {
     all: ["reports"] as const,
-    list: (params: { status?: string; search?: string; page?: number; pageSize?: number } = {}) =>
-      ["reports", "list", params.status ?? "all", params.search ?? "", params.page ?? 1, params.pageSize ?? 20] as const,
+    list: (params: { status?: string; search?: string; page?: number; pageSize?: number; assignedToUserId?: string } = {}) =>
+      ["reports", "list", params.status ?? "all", params.search ?? "", params.page ?? 1, params.pageSize ?? 20, params.assignedToUserId ?? ""] as const,
     detail: (id: string) => ["reports", "detail", id] as const,
     evidence: (id: string) => ["reports", "evidence", id] as const,
     messages: (id: string) => ["reports", "messages", id] as const,
@@ -31,6 +31,8 @@ export const queryKeys = {
     all: ["staff"] as const,
     list: (params: { pageSize?: number; page?: number; organizationId?: string } = {}) =>
       ["staff", "list", params] as const,
+    detail: (id: string) => ["staff", "detail", id] as const,
+    caseCounts: (assignedToUserId: string) => ["staff", "case-counts", assignedToUserId] as const,
   },
 
   organizations: {

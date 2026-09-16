@@ -5,7 +5,7 @@ import { Link } from "react-router-dom";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUpRight, Download, FolderOpen, Search, ShieldCheck, X } from "lucide-react";
 import { getReportById, getReports } from "../../services/incidentsService";
-import { formatEnum, type ComplaintStatus, type Report } from "../../types/report";
+import { formatEnum, STATUS_TABS, type ComplaintStatus, type Report } from "../../types/report";
 import { queryKeys } from "../../lib/queryKeys";
 import { useAuth } from "../../context/auth";
 import { reportPath } from "../../lib/paths";
@@ -47,16 +47,6 @@ function downloadCsv(rows: Report[]) {
   a.click();
   URL.revokeObjectURL(url);
 }
-
-const STATUS_TABS: { label: string; value: ComplaintStatus | "All" }[] = [
-  { label: "All", value: "All" },
-  { label: "Submitted", value: "SUBMITTED" },
-  { label: "Under Review", value: "UNDER_REVIEW" },
-  { label: "Investigating", value: "INVESTIGATING" },
-  { label: "More Info", value: "MORE_INFO_REQUESTED" },
-  { label: "Resolved", value: "RESOLVED" },
-  { label: "Closed", value: "CLOSED" },
-];
 
 export default function ReportsList() {
   const { role } = useAuth();
@@ -209,7 +199,7 @@ export default function ReportsList() {
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
+export function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
     SUBMITTED: "bg-amber-50 text-amber-800",
     UNDER_REVIEW: "bg-sky-50 text-sky-800",
@@ -226,7 +216,7 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function PriorityBadge({ priority }: { priority: string }) {
+export function PriorityBadge({ priority }: { priority: string }) {
   const map: Record<string, string> = {
     CRITICAL: "bg-red-50 text-red-800",
     HIGH: "bg-amber-50 text-amber-800",
