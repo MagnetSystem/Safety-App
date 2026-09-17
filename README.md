@@ -4,7 +4,7 @@ Welcome to the **Safety Platform** repository. This is a multi-tenant safety pro
 
 ---
 
-## 🏗️ Architecture & Structures
+## 🏗️ Architecture & Structure
 
 This repository is structureds as a **Monorepo**, housing the following core services:
 
