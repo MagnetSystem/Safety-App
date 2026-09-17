@@ -1,4 +1,28 @@
-import type { ProfileFieldDef } from '../types';
+import type { ProfileFieldDef, StudentProfile } from '../types';
+
+/** Used when a member has no organization (or its field defs haven't loaded) — the bare minimum for Emergency SOS. */
+export const FALLBACK_PROFILE_FIELDS: ProfileFieldDef[] = [
+  { key: 'mobile', label: 'Mobile number', type: 'tel', group: 'identity', required: true },
+  { key: 'emergencyContactName', label: 'Emergency contact name', type: 'text', group: 'emergency', required: true },
+  { key: 'emergencyContactPhone', label: 'Emergency contact phone', type: 'tel', group: 'emergency', required: true },
+];
+
+/** The field set a member is expected to fill, resolved the same way for every screen that renders or checks it. */
+export function resolveMemberFields(profile: Pick<StudentProfile, 'organization'>): ProfileFieldDef[] {
+  const defs =
+    profile.organization?.organizationType?.memberFields ??
+    profile.organization?.settings?.profileFieldDefs ??
+    FALLBACK_PROFILE_FIELDS;
+  const usable = defs.filter((f) => f.key !== 'name');
+  return usable.length ? usable : FALLBACK_PROFILE_FIELDS;
+}
+
+/** True once every required field for this member's organization has a value (column or profile blob). */
+export function isProfileComplete(profile: StudentProfile): boolean {
+  const fields = resolveMemberFields(profile);
+  const values = valuesFromProfile(fields, profile as unknown as Record<string, unknown>);
+  return fields.every((f) => !f.required || values[f.key].trim().length > 0);
+}
 
 /**
  * Columns the backend stores directly on the member row (see UpdateMemberProfileDto).

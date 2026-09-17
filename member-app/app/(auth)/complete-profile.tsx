@@ -6,19 +6,15 @@ import { ProfileFieldInput } from '../../src/components/ProfileFieldInput';
 import { Screen } from '../../src/components/PhoneFrame';
 import { colors, spacing, typography, shadows } from '../../src/constants/theme';
 import { getMyProfile, updateMyProfile } from '../../src/services/membersService';
-import { isValidIsoDate, buildProfilePatch } from '../../src/lib/profileFields';
+import { isValidIsoDate, buildProfilePatch, resolveMemberFields, FALLBACK_PROFILE_FIELDS } from '../../src/lib/profileFields';
+import { useAuth } from '../../src/store/AuthContext';
 import { Check } from 'lucide-react-native';
 import type { ProfileFieldDef } from '../../src/types';
 
-const FALLBACK_FIELDS: ProfileFieldDef[] = [
-  { key: 'mobile', label: 'Mobile number', type: 'tel', group: 'identity', required: true },
-  { key: 'emergencyContactName', label: 'Emergency contact name', type: 'text', group: 'emergency', required: true },
-  { key: 'emergencyContactPhone', label: 'Emergency contact phone', type: 'tel', group: 'emergency', required: true },
-];
-
 export default function CompleteProfileScreen() {
   const router = useRouter();
-  const [fields, setFields] = useState<ProfileFieldDef[]>(FALLBACK_FIELDS);
+  const { refreshProfileStatus } = useAuth();
+  const [fields, setFields] = useState<ProfileFieldDef[]>(FALLBACK_PROFILE_FIELDS);
   const [values, setValues] = useState<Record<string, string>>({});
   const [orgLabel, setOrgLabel] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -28,12 +24,8 @@ export default function CompleteProfileScreen() {
   useEffect(() => {
     getMyProfile()
       .then((p) => {
-        const defs =
-          p.organization?.organizationType?.memberFields ??
-          p.organization?.settings?.profileFieldDefs ??
-          FALLBACK_FIELDS;
-        const usable = defs.filter((f) => f.key !== 'name');
-        setFields(usable.length ? usable : FALLBACK_FIELDS);
+        const usable = resolveMemberFields(p);
+        setFields(usable);
         setOrgLabel(p.organization?.organizationType?.label ?? p.organization?.name ?? null);
         const next: Record<string, string> = {};
         for (const f of usable) {
@@ -66,6 +58,7 @@ export default function CompleteProfileScreen() {
     try {
       const { columnPatch, profile } = buildProfilePatch(fields, values);
       await updateMyProfile({ ...columnPatch, profile } as any);
+      await refreshProfileStatus();
       router.replace('/(tabs)/home');
     } catch (err: any) {
       const raw = err.response?.data?.message;

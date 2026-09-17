@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ShieldCheck } from 'lucide-react-native';
-import { getMyProfile } from '../../src/services/membersService';
 import { Glass, GlassInput } from '../../src/components/ui-kit';
 import { Screen } from '../../src/components/PhoneFrame';
 import { colors, spacing, typography, shadows } from '../../src/constants/theme';
@@ -23,18 +22,8 @@ export default function LoginScreen() {
     setError(null);
     setSubmitting(true);
     try {
-      await login(email.trim(), password);
-      try {
-        const profile = await getMyProfile();
-        const isProfileIncomplete = !profile.mobile || !profile.studentNumber || !profile.department || !profile.emergencyContactName || !profile.emergencyContactPhone;
-        if (isProfileIncomplete) {
-          router.replace('/(auth)/complete-profile' as any);
-        } else {
-          router.replace('/(tabs)/home');
-        }
-      } catch {
-        router.replace('/(tabs)/home');
-      }
+      const incomplete = await login(email.trim(), password);
+      router.replace(incomplete ? ('/(auth)/complete-profile' as any) : '/(tabs)/home');
     } catch (err: any) {
       setError(err.message ?? 'Could not sign in.');
     } finally {

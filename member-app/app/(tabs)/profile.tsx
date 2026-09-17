@@ -40,7 +40,7 @@ import {
   getMyProfile, updateMyProfile, exportMyData, deleteMyAccount, joinOrganization,
 } from '../../src/services/membersService';
 import { changePassword } from '../../src/services/authService';
-import { inviteGuardian, listMyGuardians, acceptGuardianCode } from '../../src/services/guardiansService';
+import { inviteGuardian, listMyGuardians, acceptGuardianCode, revokeGuardian } from '../../src/services/guardiansService';
 import { buildProfilePatch, isValidIsoDate, valuesFromProfile } from '../../src/lib/profileFields';
 import type { ProfileFieldDef, StudentProfile } from '../../src/types';
 import { colors, radius, spacing, typography } from '../../src/constants/theme';
@@ -199,6 +199,7 @@ export default function ProfileScreen() {
   const setDetailValue = (key: string, value: string) => setDetailValues((prev) => ({ ...prev, [key]: value }));
 
   const [guardians, setGuardians] = useState<{ id: string; status: string; guardian: { email: string } | null }[]>([]);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
 
   const applyProfile = useCallback((p: StudentProfile) => {
     setProfile(p);
@@ -235,6 +236,7 @@ export default function ProfileScreen() {
   const [joinCode, setJoinCode] = useState('');
   const [joining, setJoining] = useState(false);
   const [guardianCode, setGuardianCode] = useState<string | null>(null);
+  const [guardianCodeLinkId, setGuardianCodeLinkId] = useState<string | null>(null);
   const [inviting, setInviting] = useState(false);
   const [acceptCode, setAcceptCode] = useState('');
 
@@ -383,18 +385,52 @@ export default function ProfileScreen() {
     tapFeedback();
     setInviting(true);
     setGuardianCode(null);
+    setGuardianCodeLinkId(null);
     const started = Date.now();
     try {
       const invited = await inviteGuardian();
       const wait = Math.max(0, 1100 - (Date.now() - started));
       if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
       setGuardianCode(invited.code);
+      setGuardianCodeLinkId(invited.id);
       successFeedback();
+      listMyGuardians().then(setGuardians).catch(() => undefined);
     } catch {
       Alert.alert('Could not create invite', 'Please try again in a moment.');
     } finally {
       setInviting(false);
     }
+  };
+
+  const handleRevokeGuardian = (id: string, isPending: boolean) => {
+    Alert.alert(
+      isPending ? 'Cancel this invite?' : 'Remove this guardian?',
+      isPending
+        ? 'The invite code will stop working.'
+        : 'They will no longer be alerted if you trigger Emergency SOS.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: isPending ? 'Cancel invite' : 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            setRevokingId(id);
+            try {
+              await revokeGuardian(id);
+              if (id === guardianCodeLinkId) {
+                setGuardianCode(null);
+                setGuardianCodeLinkId(null);
+              }
+              await listMyGuardians().then(setGuardians);
+            } catch {
+              Alert.alert('Could not remove', 'Please try again in a moment.');
+            } finally {
+              setRevokingId(null);
+            }
+          },
+        },
+      ],
+    );
   };
 
   const handleAcceptGuardian = async () => {
@@ -549,7 +585,24 @@ export default function ProfileScreen() {
             <>
               <Text style={styles.sectionLabel}>Your guardians</Text>
               {guardians.map((g) => (
-                <Row key={g.id} label={g.status} value={g.guardian?.email ?? 'Waiting to accept'} />
+                <View key={g.id} style={styles.guardianRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.rowLabel}>{g.status === 'PENDING' ? 'Pending' : 'Active'}</Text>
+                    <Text style={styles.rowValue}>{g.guardian?.email ?? 'Waiting to accept'}</Text>
+                  </View>
+                  <Pressable
+                    style={styles.guardianRemoveBtn}
+                    onPress={() => handleRevokeGuardian(g.id, g.status === 'PENDING')}
+                    disabled={revokingId === g.id}
+                    hitSlop={8}
+                  >
+                    {revokingId === g.id ? (
+                      <ActivityIndicator size="small" color="#C0433E" />
+                    ) : (
+                      <Trash2 size={16} color="#C0433E" />
+                    )}
+                  </Pressable>
+                </View>
               ))}
             </>
           )}
@@ -1034,6 +1087,22 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: spacing.lg,
     gap: spacing.md,
+  },
+  guardianRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+  },
+  guardianRemoveBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(192, 67, 62, 0.1)',
   },
   rowLabel: {
     ...typography.caption,

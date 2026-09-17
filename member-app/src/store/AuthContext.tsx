@@ -5,6 +5,8 @@ import { setAuthFailureHandler } from '../services/api';
 import { flushSos } from '../services/pendingSos';
 import { registerForPush, unregisterPush } from '../services/push';
 import { login as loginRequest, registerStudent as registerRequest, getMe, RegisterStudentInput } from '../services/authService';
+import { getMyProfile } from '../services/membersService';
+import { isProfileComplete } from '../lib/profileFields';
 
 interface SessionUser {
   id: string;
@@ -18,10 +20,12 @@ interface AuthContextValue {
   user: SessionUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  profileIncomplete: boolean;
   error: string | null;
-  login: (email: string, password: string) => Promise<void>;
-  register: (input: RegisterStudentInput) => Promise<void>;
+  login: (email: string, password: string) => Promise<boolean>;
+  register: (input: RegisterStudentInput) => Promise<boolean>;
   logout: () => Promise<void>;
+  refreshProfileStatus: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -33,9 +37,25 @@ function extractErrorMessage(err: any, fallback: string) {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [profileIncomplete, setProfileIncomplete] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const segments = useSegments();
+
+  // Fails safe: if the profile can't be checked (network hiccup, cold token),
+  // treat it as incomplete rather than silently letting the member skip it.
+  const checkProfileStatus = useCallback(async (): Promise<boolean> => {
+    try {
+      const profile = await getMyProfile();
+      return !isProfileComplete(profile);
+    } catch {
+      return true;
+    }
+  }, []);
+
+  const refreshProfileStatus = useCallback(async () => {
+    setProfileIncomplete(await checkProfileStatus());
+  }, [checkProfileStatus]);
 
   // When the axios layer detects a dead session (refresh failed / account
   // revoked) it calls this — drop the user so the guard below bounces to login.
@@ -45,15 +65,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Route guard: if the session dies while the user is deep in the app (refresh
-  // failed / account revoked), bounce them to login. The forward direction
-  // (login/register → app) stays with those screens' own explicit navigation.
+  // failed / account revoked), bounce them to login. Also catches a member
+  // landing in the app (e.g. a restored session on cold start) with required
+  // profile fields still missing — the login/register screens additionally
+  // navigate there directly on their own success path.
   useEffect(() => {
     if (isLoading) return;
     const inAuthGroup = segments[0] === '(auth)';
     if (!user && !inAuthGroup) {
       router.replace('/(auth)/login');
+    } else if (user && profileIncomplete && !inAuthGroup) {
+      router.replace('/(auth)/complete-profile');
     }
-  }, [user, segments, isLoading]);
+  }, [user, profileIncomplete, segments, isLoading]);
 
   // Once signed in, flush any offline SOS alerts and register for push.
   useEffect(() => {
@@ -85,6 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           organizationId,
           collegeId: organizationId,
         });
+        setProfileIncomplete(await checkProfileStatus());
       } catch {
         await deleteItem('accessToken');
         await deleteItem('refreshToken');
@@ -105,34 +130,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const data = await loginRequest(email, password);
       await persistSession(data);
+      const incomplete = await checkProfileStatus();
+      setProfileIncomplete(incomplete);
+      return incomplete;
     } catch (err) {
       const message = extractErrorMessage(err, 'Could not sign in. Check your email and password.');
       setError(message);
       throw new Error(message);
     }
-  }, [persistSession]);
+  }, [persistSession, checkProfileStatus]);
 
   const register = useCallback(async (input: RegisterStudentInput) => {
     setError(null);
     try {
       const data = await registerRequest(input);
       await persistSession(data);
+      const incomplete = await checkProfileStatus();
+      setProfileIncomplete(incomplete);
+      return incomplete;
     } catch (err) {
       const message = extractErrorMessage(err, 'Could not create your account.');
       setError(message);
       throw new Error(message);
     }
-  }, [persistSession]);
+  }, [persistSession, checkProfileStatus]);
 
   const logout = useCallback(async () => {
     await unregisterPush(); // needs the still-valid token to make the authed call
     await deleteItem('accessToken');
     await deleteItem('refreshToken');
     setUser(null);
+    setProfileIncomplete(true);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, isAuthenticated: !!user, error, login, register, logout }}>
+    <AuthContext.Provider
+      value={{ user, isLoading, isAuthenticated: !!user, profileIncomplete, error, login, register, logout, refreshProfileStatus }}
+    >
       {children}
     </AuthContext.Provider>
   );
