@@ -41,7 +41,7 @@ import {
 } from '../../src/services/membersService';
 import { changePassword } from '../../src/services/authService';
 import { inviteGuardian, listMyGuardians, acceptGuardianCode, revokeGuardian } from '../../src/services/guardiansService';
-import { buildProfilePatch, isValidIsoDate, valuesFromProfile } from '../../src/lib/profileFields';
+import { buildProfilePatch, isValidIsoDate, valuesFromProfile, resolveMemberFields } from '../../src/lib/profileFields';
 import type { ProfileFieldDef, StudentProfile } from '../../src/types';
 import { colors, radius, spacing, typography } from '../../src/constants/theme';
 import { useAuth } from '../../src/store/AuthContext';
@@ -203,8 +203,8 @@ export default function ProfileScreen() {
 
   const applyProfile = useCallback((p: StudentProfile) => {
     setProfile(p);
-    const defs = p.organization?.organizationType?.memberFields ?? p.organization?.settings?.profileFieldDefs ?? [];
-    const usable = defs.filter((f) => f.key !== 'name' && f.group !== 'medical' && f.group !== 'emergency' && f.group !== 'organization');
+    const defs = resolveMemberFields(p);
+    const usable = defs.filter((f) => f.group !== 'medical' && f.group !== 'emergency' && f.group !== 'organization');
     setDetailFields(usable);
     setDetailValues(valuesFromProfile(usable, p as unknown as Record<string, unknown>));
     setFormData({

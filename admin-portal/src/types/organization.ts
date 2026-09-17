@@ -9,6 +9,14 @@ export interface ProfileFieldDef {
   memberColumn?: boolean;
 }
 
+export interface OrgSettings {
+  categories?: string[];
+  features?: { guardianAlerts?: boolean; bulkSignup?: boolean; reporting?: boolean; departmentsEnabled?: boolean };
+  profileFields?: string[];
+  profileFieldDefs?: ProfileFieldDef[];
+  defaultDepartments?: { name: string; slug: string; description: string }[];
+}
+
 export interface Member {
   id: string;
   name: string;
@@ -42,7 +50,7 @@ export interface Member {
     name: string;
     code: string;
     industry?: string;
-    settings?: { profileFieldDefs?: ProfileFieldDef[] } | null;
+    settings?: OrgSettings | null;
     organizationType?: { slug: string; label: string; memberFields?: ProfileFieldDef[] } | null;
   };
   college?: { id: string; name: string; code: string };
@@ -55,7 +63,7 @@ export interface Organization {
   code: string;
   industry?: string;
   joinCode?: string;
-  organizationType?: { id: string; slug: string; label: string } | null;
+  organizationType?: { id: string; slug: string; label: string; memberFields?: ProfileFieldDef[] } | null;
   address: string | null;
   state: string | null;
   district: string | null;
@@ -64,7 +72,7 @@ export interface Organization {
   phone: string | null;
   email: string | null;
   status: 'ACTIVE' | 'SUSPENDED';
-  settings?: Record<string, unknown> | null;
+  settings?: OrgSettings | null;
   createdAt: string;
   _count?: { members?: number; staff?: number; incidents?: number; students?: number; admins?: number; complaints?: number };
 }

@@ -1,4 +1,4 @@
-import type { Member, ProfileFieldDef } from '../types/organization';
+import type { Member, Organization, ProfileFieldDef } from '../types/organization';
 
 /** Used when a member has no organization (or its field defs haven't loaded). */
 export const FALLBACK_PROFILE_FIELDS: ProfileFieldDef[] = [
@@ -7,14 +7,20 @@ export const FALLBACK_PROFILE_FIELDS: ProfileFieldDef[] = [
   { key: 'emergencyContactPhone', label: 'Emergency contact phone', type: 'tel', group: 'emergency' },
 ];
 
-/** The field set a member's organization asks for — same schema the member-app renders and saves against. */
-export function resolveMemberFields(member: Member): ProfileFieldDef[] {
-  const defs =
-    member.organization?.organizationType?.memberFields ??
-    member.organization?.settings?.profileFieldDefs ??
-    FALLBACK_PROFILE_FIELDS;
+/**
+ * The field set an org asks its members to fill — same schema the member-app renders and saves against.
+ * An org's own `settings.profileFieldDefs` (its customized copy, seeded from the type template at
+ * creation and editable from Settings) takes priority over the shared `organizationType.memberFields`
+ * template, so an owner's customization actually takes effect instead of being silently overridden.
+ */
+export function resolveOrgMemberFields(org?: Organization | null): ProfileFieldDef[] {
+  const defs = org?.settings?.profileFieldDefs ?? org?.organizationType?.memberFields ?? FALLBACK_PROFILE_FIELDS;
   const usable = defs.filter((f) => f.key !== 'name');
   return usable.length ? usable : FALLBACK_PROFILE_FIELDS;
+}
+
+export function resolveMemberFields(member: Member): ProfileFieldDef[] {
+  return resolveOrgMemberFields(member.organization as Organization | undefined);
 }
 
 /** Reads a field's value off the member — direct column first, then the free-form `profile` JSON blob. */
@@ -46,6 +52,39 @@ export const FIELD_GROUP_LABELS: Record<string, string> = {
   medical: 'Medical',
   organization: 'Organization',
 };
+
+/** Groups an owner can pick when adding/editing a member field — "organization" is a setup-time-only group. */
+export const EDITABLE_FIELD_GROUPS = ['identity', 'role', 'location', 'emergency', 'medical'] as const;
+
+export const FIELD_TYPE_LABELS: Record<string, string> = {
+  text: 'Text',
+  tel: 'Phone number',
+  email: 'Email',
+  number: 'Number',
+  select: 'Choice (dropdown)',
+  boolean: 'Yes / No',
+  date: 'Date',
+};
+
+export const EDITABLE_FIELD_TYPES = Object.keys(FIELD_TYPE_LABELS) as (keyof typeof FIELD_TYPE_LABELS)[];
+
+/** Turns a label into a stable, unique field key, e.g. "Scholarship ID" -> "scholarshipId". */
+export function slugifyFieldKey(label: string, existingKeys: Set<string>): string {
+  const base = label
+    .trim()
+    .replace(/[^a-zA-Z0-9 ]/g, '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word, i) => (i === 0 ? word.toLowerCase() : word[0].toUpperCase() + word.slice(1).toLowerCase()))
+    .join('') || 'field';
+  let key = base;
+  let suffix = 2;
+  while (existingKeys.has(key)) {
+    key = `${base}${suffix}`;
+    suffix += 1;
+  }
+  return key;
+}
 
 export function groupFields(fields: ProfileFieldDef[]): { group: string; label: string; fields: ProfileFieldDef[] }[] {
   const order = ['identity', 'role', 'location', 'emergency', 'medical', 'organization'];

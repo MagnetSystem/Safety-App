@@ -1,8 +1,8 @@
 import QueryError from '../../components/QueryError';
-import type { Organization } from '../../types/organization';
+import type { Organization, OrgSettings, ProfileFieldDef } from '../../types/organization';
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus, Trash2, RotateCcw } from "lucide-react";
 import { useAuth } from "../../context/auth";
 import { canAddOrgAdmins, canManageOrgTeam } from "../../types/user";
 import { changePassword, updateMyProfile } from "../../services/authService";
@@ -14,8 +14,16 @@ import {
   updateMyOrganization,
 } from "../../services/organizationsService";
 import { queryKeys } from "../../lib/queryKeys";
+import {
+  resolveOrgMemberFields,
+  EDITABLE_FIELD_GROUPS,
+  EDITABLE_FIELD_TYPES,
+  FIELD_TYPE_LABELS,
+  FIELD_GROUP_LABELS,
+  slugifyFieldKey,
+} from "../../lib/profileFields";
 
-type Tab = "account" | "organization" | "features" | "access";
+type Tab = "account" | "organization" | "features" | "memberFields" | "access";
 
 export default function Settings() {
   const { user, role, updateLocalUser } = useAuth();
@@ -27,6 +35,7 @@ export default function Settings() {
     { id: "account", label: "My account", show: true },
     { id: "organization", label: "Organization", show: canOrg },
     { id: "features", label: "Safety features", show: canFeatures },
+    { id: "memberFields", label: "Member fields", show: canFeatures },
     { id: "access", label: "Join & access", show: canOrg },
   ];
 
@@ -59,6 +68,7 @@ export default function Settings() {
       )}
       {tab === "organization" && canOrg && <OrganizationPanel />}
       {tab === "features" && canFeatures && <FeaturesPanel />}
+      {tab === "memberFields" && canFeatures && <MemberFieldsPanel />}
       {tab === "access" && canOrg && <AccessPanel />}
     </div>
   );
@@ -229,7 +239,7 @@ function FeaturesPanel() {
     queryKey: queryKeys.organizations.me,
     queryFn: getMyOrganization,
   });
-  const [settings, setSettings] = useState<(Record<string, unknown> & { features?: Record<string, boolean> }) | null>(null);
+  const [settings, setSettings] = useState<OrgSettings | null>(null);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -240,7 +250,7 @@ function FeaturesPanel() {
   if (isError) return <QueryError message="Unable to load safety features." retry={refetch} />;
   if (isLoading || !settings) return <div className="text-sm text-slate-500">Loading…</div>;
 
-  const features = settings.features ?? {};
+  const features: Record<string, boolean> = settings.features ?? {};
   const toggle = (key: string) =>
     setSettings({ ...settings, features: { ...features, [key]: !features[key] } });
 
@@ -275,6 +285,179 @@ function FeaturesPanel() {
       ))}
       <button onClick={save} disabled={saving} className="px-4 py-2 rounded-xl bg-teal-600 text-white text-sm">
         Save features
+      </button>
+    </div>
+  );
+}
+
+function MemberFieldsPanel() {
+  const queryClient = useQueryClient();
+  const { data: orgData, isLoading, isError, refetch } = useQuery({
+    queryKey: queryKeys.organizations.me,
+    queryFn: getMyOrganization,
+  });
+  const [org, setOrg] = useState<Organization | null>(null);
+  const [fields, setFields] = useState<ProfileFieldDef[]>([]);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const [newLabel, setNewLabel] = useState("");
+  const [newType, setNewType] = useState<string>("text");
+  const [newGroup, setNewGroup] = useState<string>("role");
+  const [newRequired, setNewRequired] = useState(false);
+
+  useEffect(() => {
+    if (orgData) {
+      setOrg(orgData);
+      setFields(resolveOrgMemberFields(orgData));
+    }
+  }, [orgData]);
+
+  if (isError) return <QueryError message="Unable to load member fields." retry={refetch} />;
+  if (isLoading || !org) return <div className="text-sm text-slate-500">Loading…</div>;
+
+  const templateFields = (org.organizationType?.memberFields ?? []).filter((f) => f.key !== 'name');
+
+  const updateField = (key: string, patch: Partial<ProfileFieldDef>) =>
+    setFields((prev) => prev.map((f) => (f.key === key ? { ...f, ...patch } : f)));
+
+  const removeField = (key: string) => setFields((prev) => prev.filter((f) => f.key !== key));
+
+  const addField = () => {
+    if (newLabel.trim().length < 2) return;
+    const key = slugifyFieldKey(newLabel, new Set(fields.map((f) => f.key)));
+    setFields((prev) => [...prev, { key, label: newLabel.trim(), type: newType, group: newGroup, required: newRequired }]);
+    setNewLabel("");
+    setNewRequired(false);
+  };
+
+  const resetToDefault = () => {
+    if (!window.confirm(`Replace these with ${org.organizationType?.label ?? 'the default'}'s standard fields? Unsaved changes will be lost.`)) return;
+    setFields(templateFields.length ? templateFields : []);
+  };
+
+  const save = async () => {
+    if (saving || fields.length === 0) return;
+    setError("");
+    setMessage("");
+    setSaving(true);
+    try {
+      await updateMyOrgSettings({
+        ...(org.settings ?? {}),
+        profileFieldDefs: fields,
+        profileFields: fields.map((f) => f.key),
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.organizations.me });
+      setMessage("Member fields saved.");
+    } catch {
+      setError("Could not save member fields. Your changes are preserved here — try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      {message && <div className="px-3 py-2 rounded-xl bg-teal-50 text-teal-800 text-sm">{message}</div>}
+      {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+
+      <div className="surface-card p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="font-medium">What we ask your members</h2>
+            <p className="text-sm text-slate-500 mt-1">
+              Shown when a member completes their profile and in their Settings. Changes here only affect {org.name}.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={resetToDefault}
+            className="shrink-0 inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-teal-700"
+          >
+            <RotateCcw size={12} /> Reset to {org.organizationType?.label ?? "default"}
+          </button>
+        </div>
+      </div>
+
+      <div className="surface-card divide-y divide-border">
+        {fields.length === 0 && <p className="p-4 text-sm text-slate-500">No fields yet — add one below.</p>}
+        {fields.map((f) => (
+          <div key={f.key} className="p-4 space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_150px_150px_auto_auto] gap-2 items-center">
+              <input
+                value={f.label}
+                onChange={(e) => updateField(f.key, { label: e.target.value })}
+                className="border rounded-xl px-3 py-2 text-sm"
+              />
+              <select value={f.type} onChange={(e) => updateField(f.key, { type: e.target.value })} className="border rounded-xl px-2 py-2 text-sm">
+                {EDITABLE_FIELD_TYPES.map((t) => (
+                  <option key={t} value={t}>{FIELD_TYPE_LABELS[t]}</option>
+                ))}
+              </select>
+              <select value={f.group} onChange={(e) => updateField(f.key, { group: e.target.value })} className="border rounded-xl px-2 py-2 text-sm">
+                {EDITABLE_FIELD_GROUPS.map((g) => (
+                  <option key={g} value={g}>{FIELD_GROUP_LABELS[g]}</option>
+                ))}
+              </select>
+              <label className="flex items-center gap-1.5 text-xs text-slate-500 whitespace-nowrap">
+                <input type="checkbox" checked={!!f.required} onChange={(e) => updateField(f.key, { required: e.target.checked })} />
+                Required
+              </label>
+              <button
+                type="button"
+                onClick={() => removeField(f.key)}
+                disabled={fields.length <= 1}
+                className="justify-self-end text-slate-400 hover:text-red-600 disabled:opacity-30"
+                title="Remove field"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+            {f.type === "select" && (
+              <input
+                value={(f.options ?? []).join(", ")}
+                onChange={(e) => updateField(f.key, { options: e.target.value.split(",").map((o) => o.trim()).filter(Boolean) })}
+                placeholder="Options, comma separated"
+                className="w-full border rounded-xl px-3 py-2 text-sm"
+              />
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="surface-card p-4 space-y-3">
+        <p className="text-sm font-medium">Add a field</p>
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_150px_150px_auto] gap-2">
+          <input
+            value={newLabel}
+            onChange={(e) => setNewLabel(e.target.value)}
+            placeholder="e.g. Scholarship ID"
+            className="border rounded-xl px-3 py-2 text-sm"
+          />
+          <select value={newType} onChange={(e) => setNewType(e.target.value)} className="border rounded-xl px-2 py-2 text-sm">
+            {EDITABLE_FIELD_TYPES.map((t) => (
+              <option key={t} value={t}>{FIELD_TYPE_LABELS[t]}</option>
+            ))}
+          </select>
+          <select value={newGroup} onChange={(e) => setNewGroup(e.target.value)} className="border rounded-xl px-2 py-2 text-sm">
+            {EDITABLE_FIELD_GROUPS.map((g) => (
+              <option key={g} value={g}>{FIELD_GROUP_LABELS[g]}</option>
+            ))}
+          </select>
+          <button type="button" onClick={addField} className="inline-flex items-center justify-center gap-1.5 px-3 rounded-xl bg-slate-900 text-white text-sm">
+            <Plus size={14} /> Add
+          </button>
+        </div>
+        <label className="flex items-center gap-2 text-xs text-slate-500">
+          <input type="checkbox" checked={newRequired} onChange={(e) => setNewRequired(e.target.checked)} />
+          Required
+        </label>
+      </div>
+
+      <button onClick={save} disabled={saving || fields.length === 0} className="px-4 py-2 rounded-xl bg-teal-600 text-white text-sm inline-flex items-center gap-2">
+        {saving && <Loader2 size={14} className="animate-spin" />}
+        Save member fields
       </button>
     </div>
   );
