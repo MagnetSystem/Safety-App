@@ -1,3 +1,14 @@
+export interface ProfileFieldDef {
+  key: string;
+  label: string;
+  type: string;
+  group: string;
+  required?: boolean;
+  options?: string[];
+  help?: string;
+  memberColumn?: boolean;
+}
+
 export interface Member {
   id: string;
   name: string;
@@ -5,14 +16,35 @@ export interface Member {
   studentNumber?: string | null;
   department: string | null;
   course: string | null;
+  semester?: string | null;
   year: number | null;
   section: string | null;
   isHosteler: boolean | null;
   mobile: string | null;
+  dateOfBirth?: string | null;
+  gender?: string | null;
   bloodGroup: string | null;
+  medicalConditions?: string | null;
+  allergies?: string | null;
+  disability?: string | null;
+  guardianName?: string | null;
+  guardianPhone?: string | null;
+  emergencyContactName?: string | null;
+  emergencyContactPhone?: string | null;
+  permanentAddress?: string | null;
+  hostelAddress?: string | null;
+  hostelRoomNumber?: string | null;
+  profile?: Record<string, unknown> | null;
   organizationId?: string | null;
   collegeId?: string;
-  organization?: { id: string; name: string; code: string };
+  organization?: {
+    id: string;
+    name: string;
+    code: string;
+    industry?: string;
+    settings?: { profileFieldDefs?: ProfileFieldDef[] } | null;
+    organizationType?: { slug: string; label: string; memberFields?: ProfileFieldDef[] } | null;
+  };
   college?: { id: string; name: string; code: string };
   user?: { id: string; email: string; isActive: boolean; createdAt: string };
 }

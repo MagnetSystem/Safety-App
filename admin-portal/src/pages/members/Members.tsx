@@ -2,7 +2,7 @@ import QueryError from '../../components/QueryError';
 import Modal from '../../components/Modal';
 import { useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Search, X, Phone, Mail, Droplets, BookOpen, MapPin, Calendar } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { getMembers, resetMemberPassword } from "../../services/membersService";
 import type { Student } from "../../types/organization";
 import { useAuth } from "../../context/auth";
@@ -11,6 +11,16 @@ import { queryKeys } from "../../lib/queryKeys";
 import Pagination from "../../components/Pagination";
 import TableSkeleton from "../../components/TableSkeleton";
 import PasswordDialog from "../../components/PasswordDialog";
+import { resolveMemberFields, pickIdField, pickRoleField, memberFieldValue, groupFields, FALLBACK_PROFILE_FIELDS } from "../../lib/profileFields";
+
+function Field({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
+      <p className="text-sm font-medium text-slate-700 mt-0.5 truncate" title={value || undefined}>{value || '—'}</p>
+    </div>
+  );
+}
 
 const PAGE_SIZE = 20;
 
@@ -31,6 +41,10 @@ export default function Members() {
   const students = data?.items ?? [];
   const total = data?.total ?? 0;
   const error = isError ? "Could not load members." : "";
+
+  const referenceFields = students[0] ? resolveMemberFields(students[0]) : FALLBACK_PROFILE_FIELDS;
+  const idField = pickIdField(referenceFields);
+  const roleField = pickRoleField(referenceFields);
 
   const handleResetPassword = async (newPassword: string) => {
     if (!resetTarget || resetBusy) return;
@@ -81,10 +95,11 @@ export default function Members() {
               <thead>
                 <tr className="border-b border-border text-muted-foreground">
                   <th className="text-left font-medium px-4 py-3">Name</th>
-                  <th className="text-left font-medium px-4 py-3">Member ID</th>
-                  <th className="text-left font-medium px-4 py-3 hidden md:table-cell">Department</th>
-                  <th className="text-left font-medium px-4 py-3 hidden sm:table-cell">Year</th>
-                  <th className="text-left font-medium px-4 py-3 hidden lg:table-cell">Hosteler</th>
+                  <th className="text-left font-medium px-4 py-3">{idField.label}</th>
+                  <th className="text-left font-medium px-4 py-3 hidden sm:table-cell">Mobile</th>
+                  {roleField && (
+                    <th className="text-left font-medium px-4 py-3 hidden md:table-cell">{roleField.label}</th>
+                  )}
                   <th className="text-left font-medium px-4 py-3 hidden lg:table-cell">Email</th>
                   {role === 'support' && (
                     <th className="text-right font-medium px-4 py-3">Actions</th>
@@ -92,8 +107,12 @@ export default function Members() {
                 </tr>
               </thead>
               <tbody>
-                {students.map((s) => (
-                  <tr 
+                {students.map((s) => {
+                  const fields = resolveMemberFields(s);
+                  const rowIdField = pickIdField(fields);
+                  const rowRoleField = pickRoleField(fields);
+                  return (
+                  <tr
                     key={s.id}
                     tabIndex={0}
                     onKeyDown={event => { if (event.key === "Enter") setSelectedStudent(s); }}
@@ -101,10 +120,11 @@ export default function Members() {
                     className="border-b border-border last:border-0 hover:bg-muted/30 cursor-pointer"
                   >
                     <td className="px-4 py-3 font-medium">{s.name}</td>
-                    <td className="px-4 py-3">{s.memberNumber ?? s.studentNumber ?? "—"}</td>
-                    <td className="px-4 py-3 hidden md:table-cell">{s.department ?? "—"}</td>
-                    <td className="px-4 py-3 hidden sm:table-cell">{s.year ?? "—"}</td>
-                    <td className="px-4 py-3 hidden lg:table-cell">{s.isHosteler ? "Yes" : "No"}</td>
+                    <td className="px-4 py-3">{memberFieldValue(s, rowIdField) || "—"}</td>
+                    <td className="px-4 py-3 hidden sm:table-cell">{s.mobile ?? "—"}</td>
+                    {roleField && (
+                      <td className="px-4 py-3 hidden md:table-cell">{rowRoleField ? memberFieldValue(s, rowRoleField) || "—" : "—"}</td>
+                    )}
                     <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground">{s.user?.email ?? "—"}</td>
                     {role === 'support' && (
                       <td className="px-4 py-3 text-right">
@@ -121,7 +141,8 @@ export default function Members() {
                       </td>
                     )}
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -147,64 +168,46 @@ export default function Members() {
                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${selectedStudent.user?.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
                     {selectedStudent.user?.isActive ? 'Active Account' : 'Suspended Account'}
                   </span>
-                  <span className="text-xs text-slate-500 font-medium truncate">{selectedStudent.memberNumber || selectedStudent.studentNumber || 'No ID'}</span>
+                  <span className="text-xs text-slate-500 font-medium truncate">
+                    {memberFieldValue(selectedStudent, pickIdField(resolveMemberFields(selectedStudent))) || 'No ID'}
+                  </span>
                 </div>
               </div>
             </div>
-            
-            <div className="p-6 bg-slate-50">
-              <div className="grid grid-cols-2 gap-y-6 gap-x-4">
-                <div className="flex items-start gap-3">
-                  <Mail size={16} className="text-slate-400 mt-0.5 shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Email</p>
-                    <p className="text-sm font-medium text-slate-700 mt-0.5 truncate" title={selectedStudent.user?.email || ''}>{selectedStudent.user?.email || '—'}</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <Phone size={16} className="text-slate-400 mt-0.5 shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Mobile</p>
-                    <p className="text-sm font-medium text-slate-700 mt-0.5 truncate">{selectedStudent.mobile || '—'}</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start gap-3">
-                  <BookOpen size={16} className="text-slate-400 mt-0.5 shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Course & Dept</p>
-                    <p className="text-sm font-medium text-slate-700 mt-0.5 truncate" title={`${selectedStudent.course || '—'} ${selectedStudent.department ? `(${selectedStudent.department})` : ''}`}>
-                      {selectedStudent.course || '—'} {selectedStudent.department ? `(${selectedStudent.department})` : ''}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <Calendar size={16} className="text-slate-400 mt-0.5 shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Year & Section</p>
-                    <p className="text-sm font-medium text-slate-700 mt-0.5 truncate">
-                      Year {selectedStudent.year || '—'} {selectedStudent.section ? `• Sec ${selectedStudent.section}` : ''}
-                    </p>
-                  </div>
-                </div>
 
-                <div className="flex items-start gap-3">
-                  <MapPin size={16} className="text-slate-400 mt-0.5 shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Residential Status</p>
-                    <p className="text-sm font-medium text-slate-700 mt-0.5 truncate">{selectedStudent.isHosteler ? 'Hosteler' : 'Day Scholar'}</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <Droplets size={16} className="text-slate-400 mt-0.5 shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Blood Group</p>
-                    <p className="text-sm font-medium text-slate-700 mt-0.5 truncate">{selectedStudent.bloodGroup || '—'}</p>
-                  </div>
-                </div>
-              </div>
+            <div className="p-6 bg-slate-50 space-y-6 max-h-[60vh] overflow-y-auto">
+              {(() => {
+                const groups = groupFields(resolveMemberFields(selectedStudent));
+                const mainGroups = groups.filter((g) => g.group === 'identity' || g.group === 'role' || g.group === 'location');
+                const sensitiveGroups = groups.filter((g) => g.group === 'emergency' || g.group === 'medical');
+                return (
+                  <>
+                    <div>
+                      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3">Contact</p>
+                      <div className="grid grid-cols-2 gap-y-4 gap-x-4">
+                        <Field label="Email" value={selectedStudent.user?.email || ''} />
+                        {mainGroups.flatMap((g) => g.fields).map((f) => (
+                          <Field key={f.key} label={f.label} value={memberFieldValue(selectedStudent, f)} />
+                        ))}
+                      </div>
+                    </div>
+                    {sensitiveGroups.length > 0 && (
+                      <div className="rounded-xl border border-rose-100 bg-rose-50/60 p-4">
+                        <p className="text-[11px] font-bold text-rose-400 uppercase tracking-wider mb-3">
+                          Emergency &amp; medical — for crisis use only
+                        </p>
+                        <div className="grid grid-cols-2 gap-y-4 gap-x-4">
+                          {sensitiveGroups.flatMap((g) => g.fields).map((f) => (
+                            <Field key={f.key} label={f.label} value={memberFieldValue(selectedStudent, f)} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
-            
+
             <div className="p-4 border-t border-slate-100 flex justify-end bg-white">
               <button
                 onClick={() => setSelectedStudent(null)}
