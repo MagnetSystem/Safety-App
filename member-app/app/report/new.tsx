@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Location from 'expo-location';
@@ -21,8 +21,6 @@ const MAX_FILE_BYTES = 25 * 1024 * 1024; // 25 MB
 
 export default function NewReportScreen() {
   const router = useRouter();
-  const { mode } = useLocalSearchParams<{ mode: 'normal' | 'anonymous' }>();
-  const isAnonymous = mode === 'anonymous';
   const scroll = useRef<ScrollView>(null);
   const [step, setStep] = useState(0);
   const goToStep = (next: number) => { setStep(next); setError(null); scroll.current?.scrollTo({ y: 0, animated: false }); };
@@ -34,9 +32,9 @@ export default function NewReportScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [uploadNote, setUploadNote] = useState<string | null>(null);
 
-  const accentText = isAnonymous ? colors.lavender : colors.mintInk;
-  const accentBg = isAnonymous ? colors.lavenderTint : colors.mintTint;
-  const submitBg = isAnonymous ? colors.lavender : colors.mint;
+  const accentText = colors.mintInk;
+  const accentBg = colors.mintTint;
+  const submitBg = colors.mint;
 
   const canSubmit = description.trim().length >= 3 && !submitting;
   const canAddMore = attachments.length < MAX_ATTACHMENTS;
@@ -109,7 +107,7 @@ export default function NewReportScreen() {
 
     try {
       const complaint = await createComplaint({
-        type: isAnonymous ? 'ANONYMOUS' : 'NORMAL',
+        type: 'NORMAL',
         category,
         description: description.trim(),
         location: location.trim() || undefined,
@@ -141,12 +139,8 @@ export default function NewReportScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView ref={scroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <ScreenHeader
-          title={isAnonymous ? 'Anonymous report' : 'Report an issue'}
-          subtitle={
-            isAnonymous
-              ? 'Your identity is hidden in anonymous reporting'
-              : 'Filed with your name so the committee can follow up'
-          }
+          title="Report an issue"
+          subtitle="Filed with your name so the committee can follow up"
           back="/(tabs)/home"
           onBack={step > 0 ? () => goToStep(step - 1) : undefined}
         />
@@ -155,9 +149,7 @@ export default function NewReportScreen() {
           {['Incident', 'Details', 'Review'].map((label, index) => <View key={label} style={styles.stepItem}><View style={[styles.stepNumber, index <= step && { backgroundColor: colors.mint }]}><Text style={{ ...typography.label, color: index <= step ? '#FFFFFF' : colors.subink }}>{index + 1}</Text></View><Text style={{ ...typography.label, color: index === step ? colors.mintInk : colors.subink }}>{label}</Text></View>)}
         </View>
         <View style={[styles.identityPill, { backgroundColor: accentBg }]}>
-          <Text style={[styles.identityText, { color: accentText }]}>
-            {isAnonymous ? 'Identity hidden' : 'Identity shared'}
-          </Text>
+          <Text style={[styles.identityText, { color: accentText }]}>Identity shared</Text>
         </View>
 
         <View style={styles.formContainer}>
@@ -249,7 +241,7 @@ export default function NewReportScreen() {
           </>}
           {step === 2 && <Glass style={{ gap: 16 }}>
             <Text style={{ ...typography.h2, color: colors.ink }}>Ready when you are</Text>
-            <Text style={{ ...typography.body, color: colors.subink }}>Check the details before sending. {isAnonymous ? 'Avoid names or identifying details in your description and attachments if you want to remain anonymous.' : 'Your name will be shared with the committee.'}</Text>
+            <Text style={{ ...typography.body, color: colors.subink }}>Check the details before sending. Your name will be shared with the committee.</Text>
             <Text style={styles.label}>Incident</Text><Text style={{ ...typography.body, color: colors.ink }}>{categoryLabel(category)}</Text>
             <Text style={styles.label}>Your description</Text><Text style={{ ...typography.body, color: colors.ink }}>{description}</Text>
             <Text style={styles.label}>Location</Text><Text style={{ ...typography.body, color: colors.ink }}>{location.trim() || 'Not provided'}</Text>

@@ -86,7 +86,7 @@ export default function LoginScreen() {
         </Pressable>
 
         <Text style={styles.footnote}>
-          Choose a named or anonymous report. Review what you share before sending.
+          Review what you share before sending a report.
         </Text>
       </ScrollView>
       </KeyboardAvoidingView>

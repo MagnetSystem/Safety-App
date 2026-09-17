@@ -1,7 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, RefreshControl } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { FileText, UserX, Bell, LifeBuoy, ShieldCheck, ChevronRight, Users } from 'lucide-react-native';
+import { FileText, Bell, LifeBuoy, ShieldCheck, ChevronRight, Users } from 'lucide-react-native';
 import { Screen } from '../../src/components/PhoneFrame';
 import { Glass, StatusPill, LoadingCards, EmptyState } from '../../src/components/ui-kit';
 import { SOSButton } from '../../src/components/SOSButton';
@@ -84,9 +84,9 @@ export default function HomeScreen() {
       {contextError && <Pressable accessibilityRole="button" onPress={() => void load(true)} style={styles.retry}><Text style={styles.link}>Refresh safety setup</Text></Pressable>}
       <Text style={styles.sectionTitle}>How can we help?</Text>
       {inOrganization ? <View style={styles.actions}>
-        {[{ mode: 'normal', title: 'Report an issue', copy: 'Share with your organization', Icon: FileText, tint: colors.mintTint, ink: colors.mintInk }, { mode: 'anonymous', title: 'Anonymous report', copy: 'Report with your identity hidden', Icon: UserX, tint: colors.lavenderTint, ink: colors.lavender }].map(a => <Pressable key={a.mode} accessibilityRole="button" onPress={() => router.push({ pathname: '/report/new', params: { mode: a.mode } })} style={({ pressed }) => [styles.action, { backgroundColor: a.mode === 'normal' ? 'rgba(231,222,250,0.62)' : 'rgba(218,245,233,0.62)' }, pressed && styles.pressed]}>
-          <Frost /><View style={[styles.icon, { backgroundColor: a.tint }]}><a.Icon size={22} color={a.ink} /></View><Text style={styles.cardTitle}>{a.title}</Text><Text style={styles.secondary}>{a.copy}</Text><ChevronRight size={18} color={a.ink} />
-        </Pressable>)}
+        <Pressable accessibilityRole="button" onPress={() => router.push('/report/new')} style={({ pressed }) => [styles.action, { backgroundColor: 'rgba(231,222,250,0.62)' }, pressed && styles.pressed]}>
+          <Frost /><View style={[styles.icon, { backgroundColor: colors.mintTint }]}><FileText size={22} color={colors.mintInk} /></View><Text style={styles.cardTitle}>Report an issue</Text><Text style={styles.secondary}>Share with your organization</Text><ChevronRight size={18} color={colors.mintInk} />
+        </Pressable>
       </View> : <Glass><Text style={styles.secondary}>Join an organization to submit and track incident reports.</Text><Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/(tabs)/profile', params: { section: 'org' } })} style={styles.retry}><Text style={styles.link}>Join your organization</Text></Pressable></Glass>}
       <Pressable accessibilityRole="button" onPress={() => router.push('/help')} style={({ pressed }) => [styles.support, pressed && styles.pressed]}><Frost /><LifeBuoy size={24} color={colors.mintInk} /><View style={{ flex: 1 }}><Text style={styles.cardTitle}>A little support goes a long way</Text><Text style={styles.secondary}>Helplines & someone to talk to</Text></View><ChevronRight size={18} color={colors.mintInk} /></Pressable>
       <View style={styles.sectionRow}><Text style={styles.sectionTitle}>Recent reports</Text><Pressable accessibilityRole="button" onPress={() => router.push('/(tabs)/reports')} style={styles.retry}><Text style={styles.link}>See all</Text></Pressable></View>

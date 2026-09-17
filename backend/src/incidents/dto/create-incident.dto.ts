@@ -1,8 +1,12 @@
-import { IsDateString, IsEnum, IsNumber, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import { IsDateString, IsIn, IsNumber, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
 import { ReportType } from '@prisma/client';
 
+// Anonymous reporting is disabled for now — masking never fully hid the reporter's identity
+// (timeline/message/evidence rows still carried their user id). Revisit before re-enabling.
+const CREATABLE_REPORT_TYPES = [ReportType.NORMAL, ReportType.EMERGENCY] as const;
+
 export class CreateIncidentDto {
-  @IsEnum(ReportType)
+  @IsIn(CREATABLE_REPORT_TYPES)
   type!: ReportType;
 
   @IsString()
