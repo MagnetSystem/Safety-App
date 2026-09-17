@@ -33,8 +33,8 @@ export class StaffController {
 
   @Patch(':id')
   @Audit({ action: 'STAFF_UPDATED', entityType: 'OrgStaff' })
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateStaffDto) {
-    return this.staffService.update(id, dto);
+  update(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateStaffDto) {
+    return this.staffService.update(user, id, dto);
   }
 
   @Patch(':id/activate')
@@ -51,7 +51,7 @@ export class StaffController {
 
   @Patch(':id/reset-password')
   @Audit({ action: 'STAFF_PASSWORD_RESET', entityType: 'OrgStaff' })
-  resetPassword(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ResetPasswordDto) {
-    return this.staffService.resetPassword(id, dto);
+  resetPassword(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: ResetPasswordDto) {
+    return this.staffService.resetPassword(user, id, dto);
   }
 }

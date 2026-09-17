@@ -118,8 +118,26 @@ export class StaffService {
     return staff;
   }
 
-  async update(id: string, dto: UpdateStaffDto) {
-    await this.findOne(id);
+  /**
+   * Same hierarchy `create()` enforces: managing an Owner or Admin requires Owner (or Support)
+   * rights, not just "any Admin/Owner" — otherwise an Admin could edit or reset the password of
+   * the Owner above them.
+   */
+  private assertCanManageTarget(requester: AuthenticatedUser, targetOrgRole: OrgRole) {
+    if (requester.role === UserRole.SUPPORT) return;
+    const targetIsAdminOrOwner = targetOrgRole === OrgRole.OWNER || targetOrgRole === OrgRole.ADMIN;
+    if (targetIsAdminOrOwner) {
+      if (!canManageAdmins(requester)) {
+        throw new ForbiddenException('Only an Owner can manage an Owner or Admin account');
+      }
+    } else if (!canManageStaff(requester)) {
+      throw new ForbiddenException('You cannot manage staff');
+    }
+  }
+
+  async update(requester: AuthenticatedUser, id: string, dto: UpdateStaffDto) {
+    const staff = await this.findOne(id);
+    this.assertCanManageTarget(requester, staff.orgRole);
     await this.prisma.orgStaff.update({ where: { id }, data: dto });
     return this.findOne(id);
   }
@@ -134,9 +152,10 @@ export class StaffService {
     return this.findOne(id);
   }
 
-  async resetPassword(id: string, dto: ResetPasswordDto) {
+  async resetPassword(requester: AuthenticatedUser, id: string, dto: ResetPasswordDto) {
     const staff = await this.prisma.orgStaff.findUnique({ where: { id } });
     if (!staff) throw new NotFoundException('Staff member not found');
+    this.assertCanManageTarget(requester, staff.orgRole);
     const passwordHash = await bcrypt.hash(dto.newPassword, BCRYPT_ROUNDS);
     await this.prisma.user.update({ where: { id: staff.userId }, data: { passwordHash } });
     return { success: true };
