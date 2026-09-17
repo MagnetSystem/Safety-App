@@ -169,7 +169,7 @@ function formatDetailValue(field: ProfileFieldDef, raw?: string): string {
 export default function ProfileScreen() {
   const router = useRouter();
   const { section } = useLocalSearchParams<{ section?: string }>();
-  const { logout } = useAuth();
+  const { logout, refreshProfileStatus } = useAuth();
 
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -373,6 +373,9 @@ export default function ProfileScreen() {
     try {
       await joinOrganization(joinCode.trim());
       loadProfile();
+      // The org just joined may require fields this member hasn't filled — this immediately
+      // routes them to complete-profile via AuthContext's guard if that's the case.
+      await refreshProfileStatus();
     } catch (err: any) {
       Alert.alert('Could not join', err?.response?.data?.message ?? 'Check the join code.');
     } finally {
