@@ -74,7 +74,10 @@ export function valuesFromProfile(fields: ProfileFieldDef[], profile: Record<str
   const extra = (profile.profile as Record<string, unknown> | undefined) ?? {};
   for (const f of fields) {
     const raw = profile[f.key] ?? extra[f.key] ?? '';
-    next[f.key] = raw === true ? 'true' : raw === false ? 'false' : String(raw ?? '');
+    let value = raw === true ? 'true' : raw === false ? 'false' : String(raw ?? '');
+    // Backend may return dateOfBirth as a full ISO datetime — keep only the date part.
+    if (f.type === 'date' && value) value = value.slice(0, 10);
+    next[f.key] = value;
   }
   return next;
 }

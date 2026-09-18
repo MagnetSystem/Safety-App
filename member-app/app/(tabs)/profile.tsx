@@ -160,6 +160,16 @@ function InviteCodeCard({ generating, code }: { generating: boolean; code: strin
 
 const NOT_SET = 'Not set';
 
+const KNOWN_MEDICAL_KEYS = new Set(['bloodGroup', 'emergencyContactName', 'emergencyContactPhone']);
+
+const BLOOD_GROUP_FIELD: ProfileFieldDef = {
+  key: 'bloodGroup',
+  label: 'Blood Group',
+  type: 'select',
+  group: 'medical',
+  options: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'],
+};
+
 function formatDetailValue(field: ProfileFieldDef, raw?: string): string {
   if (!raw) return NOT_SET;
   if (field.type === 'boolean') return raw === 'true' ? 'Yes' : 'No';
@@ -198,6 +208,13 @@ export default function ProfileScreen() {
   const [detailValues, setDetailValues] = useState<Record<string, string>>({});
   const setDetailValue = (key: string, value: string) => setDetailValues((prev) => ({ ...prev, [key]: value }));
 
+  // bloodGroup / emergencyContactName / emergencyContactPhone are always present and are handled
+  // above via `formData`. Any other medical/emergency field an org owner adds from Settings is
+  // rendered generically here, the same way the academic sheet handles its fields.
+  const [medicalFields, setMedicalFields] = useState<ProfileFieldDef[]>([]);
+  const [medicalValues, setMedicalValues] = useState<Record<string, string>>({});
+  const setMedicalValue = (key: string, value: string) => setMedicalValues((prev) => ({ ...prev, [key]: value }));
+
   const [guardians, setGuardians] = useState<{ id: string; status: string; guardian: { email: string } | null }[]>([]);
   const [revokingId, setRevokingId] = useState<string | null>(null);
 
@@ -207,6 +224,11 @@ export default function ProfileScreen() {
     const usable = defs.filter((f) => f.group !== 'medical' && f.group !== 'emergency' && f.group !== 'organization');
     setDetailFields(usable);
     setDetailValues(valuesFromProfile(usable, p as unknown as Record<string, unknown>));
+    const extraMedical = defs.filter(
+      (f) => (f.group === 'medical' || f.group === 'emergency') && !KNOWN_MEDICAL_KEYS.has(f.key),
+    );
+    setMedicalFields(extraMedical);
+    setMedicalValues(valuesFromProfile(extraMedical, p as unknown as Record<string, unknown>));
     setFormData({
       bloodGroup: p.bloodGroup || '',
       emergencyContactName: p.emergencyContactName || '',
@@ -333,15 +355,20 @@ export default function ProfileScreen() {
     );
   };
 
-  const detailsValid = detailFields.every((f) => {
-    const value = (detailValues[f.key] ?? '').trim();
-    if (f.required && value.length === 0) return false;
-    if (f.type === 'date' && value && !isValidIsoDate(value)) return false;
-    return true;
-  });
+  const fieldsValid = (fields: ProfileFieldDef[], values: Record<string, string>) =>
+    fields.every((f) => {
+      const value = (values[f.key] ?? '').trim();
+      if (f.required && value.length === 0) return false;
+      if (f.type === 'date' && value && !isValidIsoDate(value)) return false;
+      return true;
+    });
+
+  const detailsValid = fieldsValid(detailFields, detailValues);
+  const medicalValid = fieldsValid(medicalFields, medicalValues);
 
   const handleSave = async () => {
     if (sheet === 'academic' && !detailsValid) return;
+    if (sheet === 'medical' && !medicalValid) return;
     setSaving(true);
     setError(null);
     try {
@@ -350,6 +377,11 @@ export default function ProfileScreen() {
           ? (() => {
               const { columnPatch, profile: extra } = buildProfilePatch(detailFields, detailValues);
               return { ...columnPatch, profile: extra };
+            })()
+          : sheet === 'medical'
+          ? (() => {
+              const { columnPatch, profile: extra } = buildProfilePatch(medicalFields, medicalValues);
+              return { ...formData, ...columnPatch, profile: extra };
             })()
           : { ...formData };
       const updated = await updateMyProfile(payload as any);
@@ -513,13 +545,16 @@ export default function ProfileScreen() {
             <Text style={[styles.medicalDesc, styles.flushText]}>Shared only when you send an emergency alert.</Text>
             <GlassInput label="Emergency Contact Name" value={formData.emergencyContactName} onChangeText={(t) => setFormData({ ...formData, emergencyContactName: t })} />
             <GlassInput label="Emergency Phone" value={formData.emergencyContactPhone} onChangeText={(t) => setFormData({ ...formData, emergencyContactPhone: t })} keyboardType="phone-pad" />
-            <GlassInput label="Blood Group" value={formData.bloodGroup} onChangeText={(t) => setFormData({ ...formData, bloodGroup: t })} />
+            <ProfileFieldInput field={BLOOD_GROUP_FIELD} value={formData.bloodGroup} onChange={(v) => setFormData({ ...formData, bloodGroup: v })} />
+            {medicalFields.map((f) => (
+              <ProfileFieldInput key={f.key} field={f} value={medicalValues[f.key] ?? ''} onChange={(v) => setMedicalValue(f.key, v)} />
+            ))}
             <View style={styles.actionRow}>
               <Pressable style={[styles.actionBtn, styles.cancelBtn]} onPress={handleCancel} disabled={saving}>
                 <X size={18} color={colors.subink} />
                 <Text style={styles.cancelText}>Cancel</Text>
               </Pressable>
-              <Pressable style={[styles.actionBtn, styles.saveBtn]} onPress={handleSave} disabled={saving}>
+              <Pressable style={[styles.actionBtn, styles.saveBtn, !medicalValid && styles.actionBtnDisabled]} onPress={handleSave} disabled={saving || !medicalValid}>
                 {saving ? <ActivityIndicator color="#FFF" size="small" /> : (
                   <>
                     <Check size={18} color="#FFF" />
@@ -539,6 +574,12 @@ export default function ProfileScreen() {
           <Row label="Emergency Phone" value={profile?.emergencyContactPhone ?? NOT_SET} />
           <View style={styles.divider} />
           <Row label="Blood group" value={profile?.bloodGroup ?? NOT_SET} />
+          {medicalFields.map((f) => (
+            <React.Fragment key={f.key}>
+              <View style={styles.divider} />
+              <Row label={f.label} value={formatDetailValue(f, medicalValues[f.key])} />
+            </React.Fragment>
+          ))}
         </>
       );
     }
