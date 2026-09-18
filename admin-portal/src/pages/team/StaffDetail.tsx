@@ -1,5 +1,6 @@
 import QueryError from '../../components/QueryError';
 import PasswordDialog from '../../components/PasswordDialog';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -47,6 +48,7 @@ export default function StaffDetail() {
   const [resetBusy, setResetBusy] = useState(false);
   const [statusBusy, setStatusBusy] = useState(false);
   const [actionError, setActionError] = useState("");
+  const [confirmSuspend, setConfirmSuspend] = useState(false);
 
   const staffQuery = useQuery({
     queryKey: queryKeys.staff.detail(id),
@@ -87,7 +89,6 @@ export default function StaffDetail() {
 
   const toggleStatus = async () => {
     if (!staff || statusBusy || !canToggleStatus) return;
-    if (staff.user.isActive && !window.confirm(`Suspend ${staff.name}?`)) return;
     setStatusBusy(true);
     setActionError("");
     try {
@@ -99,7 +100,13 @@ export default function StaffDetail() {
       setActionError("Could not update status.");
     } finally {
       setStatusBusy(false);
+      setConfirmSuspend(false);
     }
+  };
+
+  const handleToggleClick = () => {
+    if (staff?.user.isActive) setConfirmSuspend(true);
+    else toggleStatus();
   };
 
   const handleResetPassword = async (newPassword: string) => {
@@ -165,7 +172,7 @@ export default function StaffDetail() {
           </button>
           {canToggleStatus && (
             <button
-              onClick={toggleStatus}
+              onClick={handleToggleClick}
               disabled={statusBusy}
               className={`text-sm font-medium px-3 py-2 rounded-lg border inline-flex items-center gap-2 disabled:opacity-60 ${
                 staff.user.isActive ? "border-red-200 text-red-600 hover:bg-red-50" : "border-emerald-200 text-emerald-700 hover:bg-emerald-50"
@@ -287,6 +294,17 @@ export default function StaffDetail() {
         error={resetError}
         onClose={() => setResetOpen(false)}
         onSubmit={handleResetPassword}
+      />
+
+      <ConfirmDialog
+        open={confirmSuspend}
+        title="Suspend staff account?"
+        message={`Suspend ${staff.name}? They will not be able to sign in.`}
+        confirmLabel="Suspend"
+        destructive
+        busy={statusBusy}
+        onConfirm={toggleStatus}
+        onClose={() => setConfirmSuspend(false)}
       />
     </div>
   );

@@ -1,7 +1,7 @@
 import QueryError from '../../components/QueryError';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUpRight, Download, FolderOpen, Search, ShieldCheck, X } from "lucide-react";
 import { getReportById, getReports } from "../../services/incidentsService";
@@ -51,8 +51,9 @@ function downloadCsv(rows: Report[]) {
 export default function ReportsList() {
   const { role } = useAuth();
   const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
   const [filter, setFilter] = useState<ComplaintStatus | "All">("All");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
   const debouncedSearch = useDebouncedValue(search.trim(), 300);
   const [page, setPage] = useState(1);
   const status = filter === "All" ? undefined : filter;

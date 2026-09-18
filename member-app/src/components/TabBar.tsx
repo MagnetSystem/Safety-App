@@ -5,6 +5,7 @@ import { Home, List, User, HeartHandshake } from 'lucide-react-native';
 import { Frost } from './GlassSurface';
 import { radius, spacing, typography, shadows } from '../constants/theme';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { useAuth } from '../store/AuthContext';
 
 const icons = {
   home: Home,
@@ -16,13 +17,17 @@ const icons = {
 const labels = {
   home: 'Home',
   reports: 'My reports',
-  wards: 'Guardian',
+  wards: 'Watching',
   profile: 'Profile',
 };
 
 export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const isWeb = Platform.OS === 'web';
+  // `href: null` on Tabs.Screen isn't reliably reflected in the descriptor options a custom
+  // tabBar receives (it's meant for Expo Router's own default tab bar / deep-link generation),
+  // so this checks the same source of truth (_layout.tsx's Tabs.Screen conditions) directly.
+  const { isGuardianOnly } = useAuth();
 
   const content = (
     <View style={styles.content}>
@@ -33,6 +38,7 @@ export function TabBar({ state, descriptors, navigation }: BottomTabBarProps) {
         const label = labels[route.name as keyof typeof labels] || route.name;
 
         if (!Icon) return null; // Skip if no icon mapping
+        if (isGuardianOnly && (route.name === 'home' || route.name === 'reports')) return null;
 
         const onPress = () => {
           const event = navigation.emit({

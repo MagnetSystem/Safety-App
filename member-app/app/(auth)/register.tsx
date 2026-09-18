@@ -138,7 +138,7 @@ export default function RegisterScreen() {
                 </>
               ) : (
                 <Text style={styles.noticeText}>
-                  You'll accept a guardian invite code right after this (or anytime later from Profile → Guardian).
+                  You'll accept a guardian invite code right after this (or anytime later from Profile → Who I'm watching).
                 </Text>
               )}
 

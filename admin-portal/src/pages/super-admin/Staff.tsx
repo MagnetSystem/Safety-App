@@ -1,4 +1,7 @@
 import Modal from '../../components/Modal';
+import PasswordDialog from '../../components/PasswordDialog';
+import CredentialsDialog from '../../components/CredentialsDialog';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Search, Plus, Loader2, X } from "lucide-react";
@@ -20,6 +23,12 @@ export default function Staff() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [formError, setFormError] = useState("");
+  const [resetTarget, setResetTarget] = useState<CollegeAdmin | null>(null);
+  const [resetError, setResetError] = useState("");
+  const [resetBusy, setResetBusy] = useState(false);
+  const [credentials, setCredentials] = useState<{ title: string; email: string; password: string } | null>(null);
+  const [suspendTarget, setSuspendTarget] = useState<CollegeAdmin | null>(null);
+  const [statusBusy, setStatusBusy] = useState(false);
 
   const { data, isLoading: loading, isError } = useQuery({
     queryKey: staffKey,
@@ -58,6 +67,8 @@ export default function Staff() {
   };
 
   const toggleStatus = async (a: CollegeAdmin) => {
+    if (statusBusy) return;
+    setStatusBusy(true);
     const wasActive = a.user.isActive;
     queryClient.setQueryData<Paginated<CollegeAdmin>>(staffKey, (old) =>
       old
@@ -74,21 +85,29 @@ export default function Staff() {
       else await activateStaff(a.id);
     } catch {
       queryClient.invalidateQueries({ queryKey: queryKeys.staff.all });
+    } finally {
+      setStatusBusy(false);
+      setSuspendTarget(null);
     }
   };
 
-  const handleResetPassword = async (a: CollegeAdmin) => {
-    const newPassword = window.prompt(`New password for ${a.user.email} (min 8 characters):`);
-    if (!newPassword) return;
-    if (newPassword.length < 8) {
-      window.alert("Password must be at least 8 characters.");
-      return;
-    }
+  const handleToggleClick = (a: CollegeAdmin) => {
+    if (a.user.isActive) setSuspendTarget(a);
+    else toggleStatus(a);
+  };
+
+  const handleResetPassword = async (newPassword: string) => {
+    if (!resetTarget || resetBusy) return;
+    setResetBusy(true);
+    setResetError("");
     try {
-      await resetStaffPassword(a.id, newPassword);
-      window.alert("Password reset successfully.");
+      await resetStaffPassword(resetTarget.id, newPassword);
+      setCredentials({ title: "Password reset", email: resetTarget.user.email, password: newPassword });
+      setResetTarget(null);
     } catch {
-      window.alert("Could not reset password.");
+      setResetError("Could not reset password.");
+    } finally {
+      setResetBusy(false);
     }
   };
 
@@ -168,13 +187,13 @@ export default function Staff() {
                     </td>
                     <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
                       <button
-                        onClick={() => handleResetPassword(a)}
+                        onClick={() => { setResetError(""); setResetTarget(a); }}
                         className="text-xs font-medium px-2.5 py-1 rounded-lg border border-border hover:bg-muted"
                       >
                         Reset Password
                       </button>
                       <button
-                        onClick={() => toggleStatus(a)}
+                        onClick={() => handleToggleClick(a)}
                         className={`text-xs font-medium px-2.5 py-1 rounded-lg border ${
                           a.user.isActive
                             ? "border-destructive/30 text-destructive hover:bg-destructive/10"
@@ -260,6 +279,36 @@ export default function Staff() {
           </form>
         </Modal>
       )}
+
+      {credentials && (
+        <CredentialsDialog
+          title={credentials.title}
+          email={credentials.email}
+          password={credentials.password}
+          onClose={() => setCredentials(null)}
+        />
+      )}
+
+      <PasswordDialog
+        open={!!resetTarget}
+        title="Reset admin password"
+        description={resetTarget ? `Set a temporary password for ${resetTarget.user.email}.` : undefined}
+        submitting={resetBusy}
+        error={resetError}
+        onClose={() => setResetTarget(null)}
+        onSubmit={handleResetPassword}
+      />
+
+      <ConfirmDialog
+        open={!!suspendTarget}
+        title="Suspend admin account?"
+        message={suspendTarget ? `Suspend ${suspendTarget.name}? They will not be able to sign in.` : ""}
+        confirmLabel="Suspend"
+        destructive
+        busy={statusBusy}
+        onConfirm={() => suspendTarget && toggleStatus(suspendTarget)}
+        onClose={() => setSuspendTarget(null)}
+      />
     </div>
   );
 }

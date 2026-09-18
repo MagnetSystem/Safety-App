@@ -58,22 +58,16 @@ export async function uploadEvidence(
   return data;
 }
 
-/** Best-effort: uploads each attachment, returns how many succeeded. */
+/** Best-effort: uploads all attachments in parallel, returns how many succeeded. */
 export async function uploadAllEvidence(
   complaintId: string,
   attachments: LocalAttachment[],
 ): Promise<{ uploaded: number; failed: number }> {
-  let uploaded = 0;
-  let failed = 0;
-  for (const att of attachments) {
-    try {
-      await uploadEvidence(complaintId, att);
-      uploaded += 1;
-    } catch {
-      failed += 1;
-    }
-  }
-  return { uploaded, failed };
+  const results = await Promise.allSettled(
+    attachments.map((att) => uploadEvidence(complaintId, att)),
+  );
+  const uploaded = results.filter((r) => r.status === 'fulfilled').length;
+  return { uploaded, failed: results.length - uploaded };
 }
 
 export async function getEvidence(complaintId: string): Promise<EvidenceItem[]> {

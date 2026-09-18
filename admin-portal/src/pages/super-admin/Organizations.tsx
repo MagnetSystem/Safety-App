@@ -1,6 +1,7 @@
 import QueryError from '../../components/QueryError';
 import Pagination from '../../components/Pagination';
 import Modal from '../../components/Modal';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import { useEffect, useState } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Search, Plus, Building2, Loader2, X, KeyRound } from "lucide-react";
@@ -53,6 +54,7 @@ export default function Organizations() {
   const [resetBusy, setResetBusy] = useState(false);
   const [resetMessage, setResetMessage] = useState("");
   const [resetError, setResetError] = useState("");
+  const [suspendTarget, setSuspendTarget] = useState<Organization | null>(null);
 
   const listKey = queryKeys.organizations.list({ search: debouncedSearch || undefined, page, pageSize: 20 });
   const { data, isLoading: loading, isError, refetch } = useQuery({
@@ -125,7 +127,6 @@ export default function Organizations() {
 
   const toggleStatus = async (c: Organization) => {
     if (statusBusy) return;
-    if (c.status === "ACTIVE" && !window.confirm("Suspend this organization's access?")) return;
     setStatusBusy(true);
     setActionError("");
     const next = c.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE";
@@ -138,7 +139,15 @@ export default function Organizations() {
       setActionError("Could not update organization status. Please try again.");
       queryClient.invalidateQueries({ queryKey: queryKeys.organizations.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.organizations.detail(c.id) });
-    } finally { setStatusBusy(false); }
+    } finally {
+      setStatusBusy(false);
+      setSuspendTarget(null);
+    }
+  };
+
+  const handleToggleClick = (c: Organization) => {
+    if (c.status === "ACTIVE") setSuspendTarget(c);
+    else toggleStatus(c);
   };
 
   const openDetail = (c: Organization) => {
@@ -280,7 +289,7 @@ export default function Organizations() {
                         <button
                           type="button"
                           disabled={statusBusy}
-                      onClick={() => toggleStatus(c)}
+                          onClick={() => handleToggleClick(c)}
                           className={`text-xs font-medium px-2.5 py-1 rounded-lg border ${
                             c.status === "ACTIVE"
                               ? "border-destructive/30 text-destructive hover:bg-destructive/10"
@@ -401,6 +410,17 @@ export default function Organizations() {
         </aside>
       )}
       </div>
+
+      <ConfirmDialog
+        open={!!suspendTarget}
+        title="Suspend organization?"
+        message={suspendTarget ? `Suspend ${suspendTarget.name}'s access? Their staff and members will not be able to sign in.` : ""}
+        confirmLabel="Suspend"
+        destructive
+        busy={statusBusy}
+        onConfirm={() => suspendTarget && toggleStatus(suspendTarget)}
+        onClose={() => setSuspendTarget(null)}
+      />
 
       {showForm && (
         <Modal label="Onboard client" onClose={() => { if (!submitting) setShowForm(false); }} busy={submitting} size="sm">

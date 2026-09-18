@@ -1,4 +1,5 @@
 import QueryError from '../../components/QueryError';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Plus, Trash2, Building2 } from "lucide-react";
@@ -15,6 +16,7 @@ export default function Departments() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [actionError, setActionError] = useState("");
+  const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string } | null>(null);
   const { data: items = [], isLoading: loading, isError, refetch } = useQuery({
     queryKey: queryKeys.departments.all,
     queryFn: getDepartments,
@@ -35,7 +37,7 @@ export default function Departments() {
   const actionMutation = useMutation({
     mutationFn: ({ id, remove }: { id: string; remove: boolean }) => remove ? deleteDepartment(id) : updateDepartment(id, { isDefault: true }),
     onMutate: () => setActionError(""),
-    onSuccess: invalidate,
+    onSuccess: () => { invalidate(); setRemoveTarget(null); },
     onError: () => setActionError("Unable to update department. Please try again."),
   });
   const saving = createMutation.isPending;
@@ -141,11 +143,7 @@ export default function Departments() {
                     <button
                       aria-label={`Remove ${d.name}`}
                       disabled={actionMutation.isPending}
-                      onClick={() => {
-                        if (window.confirm(`Remove ${d.name}? Existing cases stay, unassigned.`)) {
-                          if (!actionMutation.isPending) actionMutation.mutate({ id: d.id, remove: true });
-                        }
-                      }}
+                      onClick={() => setRemoveTarget({ id: d.id, name: d.name })}
                       className="inline-flex text-slate-400 hover:text-red-600"
                     >
                       <Trash2 size={16} />
@@ -157,6 +155,17 @@ export default function Departments() {
           </table>
         )}
       </div>
+
+      <ConfirmDialog
+        open={!!removeTarget}
+        title="Remove department?"
+        message={removeTarget ? `Remove ${removeTarget.name}? Existing cases stay, unassigned.` : ""}
+        confirmLabel="Remove"
+        destructive
+        busy={actionMutation.isPending}
+        onConfirm={() => removeTarget && actionMutation.mutate({ id: removeTarget.id, remove: true })}
+        onClose={() => setRemoveTarget(null)}
+      />
     </div>
   );
 }

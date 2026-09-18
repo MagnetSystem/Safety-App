@@ -1,4 +1,5 @@
 import QueryError from '../../components/QueryError';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import type { Organization, OrgSettings, ProfileFieldDef } from '../../types/organization';
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -306,6 +307,7 @@ function MemberFieldsPanel() {
   const [newType, setNewType] = useState<string>("text");
   const [newGroup, setNewGroup] = useState<string>("role");
   const [newRequired, setNewRequired] = useState(false);
+  const [confirmResetFields, setConfirmResetFields] = useState(false);
 
   useEffect(() => {
     if (orgData) {
@@ -333,8 +335,8 @@ function MemberFieldsPanel() {
   };
 
   const resetToDefault = () => {
-    if (!window.confirm(`Replace these with ${org.organizationType?.label ?? 'the default'}'s standard fields? Unsaved changes will be lost.`)) return;
     setFields(templateFields.length ? templateFields : []);
+    setConfirmResetFields(false);
   };
 
   const save = async () => {
@@ -372,7 +374,7 @@ function MemberFieldsPanel() {
           </div>
           <button
             type="button"
-            onClick={resetToDefault}
+            onClick={() => setConfirmResetFields(true)}
             className="shrink-0 inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-teal-700"
           >
             <RotateCcw size={12} /> Reset to {org.organizationType?.label ?? "default"}
@@ -459,6 +461,16 @@ function MemberFieldsPanel() {
         {saving && <Loader2 size={14} className="animate-spin" />}
         Save member fields
       </button>
+
+      <ConfirmDialog
+        open={confirmResetFields}
+        title="Reset member fields?"
+        message={`Replace these with ${org.organizationType?.label ?? 'the default'}'s standard fields? Unsaved changes will be lost.`}
+        confirmLabel="Reset"
+        destructive
+        onConfirm={resetToDefault}
+        onClose={() => setConfirmResetFields(false)}
+      />
     </div>
   );
 }
@@ -467,6 +479,7 @@ function AccessPanel() {
   const queryClient = useQueryClient();
   const [actionError, setActionError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [confirmRotate, setConfirmRotate] = useState(false);
 
   const { data, isLoading: loading, isError } = useQuery({
     queryKey: queryKeys.organizations.joinCode,
@@ -496,6 +509,7 @@ function AccessPanel() {
     onError: () => {
       setActionError("Could not generate the access code.");
     },
+    onSettled: () => setConfirmRotate(false),
   });
   const busy = rotateMutation.isPending;
 
@@ -503,7 +517,10 @@ function AccessPanel() {
     if (busy) return;
     setCopied(false);
     setActionError("");
-    if (joinCode && !window.confirm("The old code will stop working immediately. Generate a new one?")) return;
+    if (joinCode) {
+      setConfirmRotate(true);
+      return;
+    }
     rotateMutation.mutate();
   };
 
@@ -542,6 +559,16 @@ function AccessPanel() {
         {busy && <Loader2 size={14} className="animate-spin" />}
         {joinCode ? "Generate new access code" : "Generate access code"}
       </button>
+
+      <ConfirmDialog
+        open={confirmRotate}
+        title="Generate new access code?"
+        message="The old code will stop working immediately."
+        confirmLabel="Generate"
+        busy={busy}
+        onConfirm={() => rotateMutation.mutate()}
+        onClose={() => setConfirmRotate(false)}
+      />
     </div>
   );
 }

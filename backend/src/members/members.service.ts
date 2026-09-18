@@ -115,13 +115,17 @@ export class MembersService {
     if (!member) throw new NotFoundException('Member profile not found');
 
     const { studentNumber, assignedDepartmentId, profile, ...rest } = dto;
+    // Merge into the existing JSON blob rather than replacing it — a form only ever submits the
+    // fields it renders (e.g. just `mobile` for a guardian-only account), so a naive replace would
+    // silently wipe unrelated keys already stored there, such as `accountPurpose`.
+    const existingProfile = (member.profile && typeof member.profile === 'object' ? member.profile : {}) as object;
     return this.prisma.member.update({
       where: { userId },
       data: {
         ...rest,
         ...(studentNumber !== undefined ? { memberNumber: studentNumber } : {}),
         ...(assignedDepartmentId !== undefined ? { assignedDepartmentId } : {}),
-        ...(profile !== undefined ? { profile: profile as object } : {}),
+        ...(profile !== undefined ? { profile: { ...existingProfile, ...(profile as object) } } : {}),
         dateOfBirth: dto.dateOfBirth ? new Date(dto.dateOfBirth) : undefined,
       },
       include: PROFILE_INCLUDE,

@@ -8,6 +8,16 @@ function isNetworkError(err: any): boolean {
   return !err?.response || err?.code === 'ERR_NETWORK' || err?.message === 'Network Error';
 }
 
+// Never let a slow/poor GPS fix delay sending the alert itself.
+const LOCATION_TIMEOUT_MS = 3000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([
+    promise,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
+  ]);
+}
+
 export type SosLocationStatus = 'active' | 'denied';
 
 export interface SosSendResult {
@@ -26,13 +36,15 @@ export async function sendEmergencySos(
   try {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status === 'granted') {
-      const position = await Location.getCurrentPositionAsync({});
-      gps = {
-        gpsLat: position.coords.latitude,
-        gpsLng: position.coords.longitude,
-        gpsAccuracy: position.coords.accuracy ?? undefined,
-      };
-      location = 'active';
+      const position = await withTimeout(Location.getCurrentPositionAsync({}), LOCATION_TIMEOUT_MS);
+      if (position) {
+        gps = {
+          gpsLat: position.coords.latitude,
+          gpsLng: position.coords.longitude,
+          gpsAccuracy: position.coords.accuracy ?? undefined,
+        };
+        location = 'active';
+      }
     }
   } catch {
     location = 'denied';

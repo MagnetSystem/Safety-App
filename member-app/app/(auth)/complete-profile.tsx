@@ -6,7 +6,7 @@ import { ProfileFieldInput } from '../../src/components/ProfileFieldInput';
 import { Screen } from '../../src/components/PhoneFrame';
 import { colors, spacing, typography, shadows } from '../../src/constants/theme';
 import { getMyProfile, updateMyProfile } from '../../src/services/membersService';
-import { isValidIsoDate, buildProfilePatch, resolveMemberFields, FALLBACK_PROFILE_FIELDS } from '../../src/lib/profileFields';
+import { isValidIsoDate, buildProfilePatch, resolveMemberFields, isGuardianOnlyProfile, FALLBACK_PROFILE_FIELDS } from '../../src/lib/profileFields';
 import { useAuth } from '../../src/store/AuthContext';
 import { Check } from 'lucide-react-native';
 import type { ProfileFieldDef } from '../../src/types';
@@ -17,6 +17,7 @@ export default function CompleteProfileScreen() {
   const [fields, setFields] = useState<ProfileFieldDef[]>(FALLBACK_PROFILE_FIELDS);
   const [values, setValues] = useState<Record<string, string>>({});
   const [orgLabel, setOrgLabel] = useState<string | null>(null);
+  const [isGuardian, setIsGuardian] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -26,6 +27,7 @@ export default function CompleteProfileScreen() {
       .then((p) => {
         const usable = resolveMemberFields(p);
         setFields(usable);
+        setIsGuardian(isGuardianOnlyProfile(p));
         setOrgLabel(p.organization?.organizationType?.label ?? p.organization?.name ?? null);
         const next: Record<string, string> = {};
         for (const f of usable) {
@@ -87,7 +89,13 @@ export default function CompleteProfileScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <ScreenHeader
           title="Complete profile"
-          subtitle={orgLabel ? `Fields for ${orgLabel}. Medical details are only used in emergencies.` : 'Only what responders need if you trigger SOS.'}
+          subtitle={
+            isGuardian
+              ? "Just so the people you watch over can reach you."
+              : orgLabel
+                ? `Fields for ${orgLabel}. Medical details are only used in emergencies.`
+                : 'Only what responders need if you trigger SOS.'
+          }
         />
 
         <View style={styles.form}>

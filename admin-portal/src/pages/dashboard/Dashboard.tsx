@@ -22,7 +22,7 @@ export default function Dashboard() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (query.trim()) navigate(`/search?q=${encodeURIComponent(query.trim())}`);
+    if (query.trim()) navigate(`/reports?q=${encodeURIComponent(query.trim())}`);
   };
 
   const maxMonth = Math.max(1, ...(data?.byMonth.map((m) => m.count) ?? [1]));

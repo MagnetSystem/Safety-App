@@ -7,13 +7,32 @@ export const FALLBACK_PROFILE_FIELDS: ProfileFieldDef[] = [
   { key: 'emergencyContactPhone', label: 'Emergency contact phone', type: 'tel', group: 'emergency', required: true },
 ];
 
+/** A guardian-only account never files reports or triggers its own SOS — it just needs to be
+ *  reachable, so Complete Profile only asks for a mobile number instead of the full member form. */
+export const GUARDIAN_PROFILE_FIELDS: ProfileFieldDef[] = [
+  { key: 'mobile', label: 'Mobile number', type: 'tel', group: 'identity', required: true },
+];
+
+type GuardianCheckProfile = Pick<StudentProfile, 'organizationId' | 'college' | 'profile'>;
+
+/** True only for an account that explicitly signed up as Guardian and has no organization —
+ *  see AuthContext's isGuardianOnly for why this can't be inferred from "no org" alone. */
+export function isGuardianOnlyProfile(profile: GuardianCheckProfile): boolean {
+  const accountPurpose = profile.profile?.accountPurpose as string | undefined;
+  const hasOrg = !!(profile.organizationId || profile.college?.id);
+  return accountPurpose === 'guardian' && !hasOrg;
+}
+
 /**
  * The field set a member is expected to fill, resolved the same way for every screen that renders or
  * checks it. An org's own `settings.profileFieldDefs` (its customized copy, editable by the owner from
  * Settings) takes priority over the shared `organizationType.memberFields` template, so a customization
  * actually takes effect instead of being silently overridden by the template.
  */
-export function resolveMemberFields(profile: Pick<StudentProfile, 'organization'>): ProfileFieldDef[] {
+export function resolveMemberFields(
+  profile: Pick<StudentProfile, 'organization'> & GuardianCheckProfile,
+): ProfileFieldDef[] {
+  if (isGuardianOnlyProfile(profile)) return GUARDIAN_PROFILE_FIELDS;
   const defs =
     profile.organization?.settings?.profileFieldDefs ??
     profile.organization?.organizationType?.memberFields ??

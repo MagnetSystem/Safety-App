@@ -38,7 +38,7 @@ export default function WardsScreen() {
   return (
     <Screen padded>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        <ScreenHeader title="Guardian" subtitle="Emergency alerts from the people you watch over" />
+        <ScreenHeader title="Watching" subtitle="Emergency alerts from the people you watch over" />
 
         {loading ? (
           <LoadingCards />
@@ -47,7 +47,7 @@ export default function WardsScreen() {
         ) : wards.length === 0 ? (
           <EmptyState
             title="You're not watching anyone yet"
-            message="Ask a member to share their guardian invite code with you, then accept it from Profile → Guardian."
+            message="Ask a member to share their guardian invite code with you, then accept it from Profile → Who I'm watching."
           />
         ) : (
           <>

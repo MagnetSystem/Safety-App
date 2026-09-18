@@ -18,6 +18,14 @@ import { colors, radius, spacing, typography, shadows } from '../../src/constant
 
 const MAX_ATTACHMENTS = 5;
 const MAX_FILE_BYTES = 25 * 1024 * 1024; // 25 MB
+const LOCATION_TIMEOUT_MS = 3000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([
+    promise,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
+  ]);
+}
 
 export default function NewReportScreen() {
   const router = useRouter();
@@ -94,12 +102,14 @@ export default function NewReportScreen() {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
-        const position = await Location.getCurrentPositionAsync({});
-        gps = {
-          gpsLat: position.coords.latitude,
-          gpsLng: position.coords.longitude,
-          gpsAccuracy: position.coords.accuracy ?? undefined,
-        };
+        const position = await withTimeout(Location.getCurrentPositionAsync({}), LOCATION_TIMEOUT_MS);
+        if (position) {
+          gps = {
+            gpsLat: position.coords.latitude,
+            gpsLng: position.coords.longitude,
+            gpsAccuracy: position.coords.accuracy ?? undefined,
+          };
+        }
       }
     } catch {
       // Proceed without GPS if error

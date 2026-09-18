@@ -6,7 +6,7 @@ import { flushSos } from '../services/pendingSos';
 import { registerForPush, unregisterPush } from '../services/push';
 import { login as loginRequest, registerStudent as registerRequest, getMe, RegisterStudentInput } from '../services/authService';
 import { getMyProfile } from '../services/membersService';
-import { isProfileComplete } from '../lib/profileFields';
+import { isProfileComplete, isGuardianOnlyProfile } from '../lib/profileFields';
 
 interface SessionUser {
   id: string;
@@ -51,9 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const checkProfileStatus = useCallback(async (): Promise<{ incomplete: boolean; guardianOnly: boolean }> => {
     try {
       const profile = await getMyProfile();
-      const accountPurpose = profile.profile?.accountPurpose as string | undefined;
-      const hasOrg = !!(profile.organizationId || profile.college?.id);
-      return { incomplete: !isProfileComplete(profile), guardianOnly: accountPurpose === 'guardian' && !hasOrg };
+      return { incomplete: !isProfileComplete(profile), guardianOnly: isGuardianOnlyProfile(profile) };
     } catch {
       return { incomplete: true, guardianOnly: false };
     }

@@ -1,5 +1,6 @@
 import QueryError from '../../components/QueryError';
 import Modal from '../../components/Modal';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -59,6 +60,7 @@ export default function Team() {
   const [resetError, setResetError] = useState("");
   const [resetBusy, setResetBusy] = useState(false);
   const [credentials, setCredentials] = useState<{ title: string; email: string; password: string } | null>(null);
+  const [deactivateTarget, setDeactivateTarget] = useState<StaffMember | null>(null);
 
   const { data, isLoading: loading, isError, refetch } = useQuery({
     queryKey: staffKey,
@@ -113,7 +115,6 @@ export default function Team() {
 
   const toggleStatus = async (member: StaffMember) => {
     if (!canManage || statusBusy || member.orgRole === "OWNER" || member.user.id === user?.id) return;
-    if (member.user.isActive && !window.confirm(`Deactivate ${member.name}?`)) return;
     setStatusBusy(true);
     setActionError("");
     const wasActive = member.user.isActive;
@@ -124,7 +125,15 @@ export default function Team() {
     } catch {
       setActionError("Could not update status.");
       queryClient.invalidateQueries({ queryKey: queryKeys.staff.all });
-    } finally { setStatusBusy(false); }
+    } finally {
+      setStatusBusy(false);
+      setDeactivateTarget(null);
+    }
+  };
+
+  const handleToggleClick = (member: StaffMember) => {
+    if (member.user.isActive) setDeactivateTarget(member);
+    else toggleStatus(member);
   };
 
   const handleResetPassword = async (newPassword: string) => {
@@ -280,7 +289,7 @@ export default function Team() {
                         Reset password
                       </button>
                       <button
-                        onClick={() => toggleStatus(m)}
+                        onClick={() => handleToggleClick(m)}
                         className={`text-xs font-medium px-2.5 py-1 rounded-lg border ${
                           m.user.isActive
                             ? "border-red-200 text-red-600 hover:bg-red-50"
@@ -299,6 +308,17 @@ export default function Team() {
       </div>
 
       <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
+
+      <ConfirmDialog
+        open={!!deactivateTarget}
+        title="Deactivate staff account?"
+        message={deactivateTarget ? `Deactivate ${deactivateTarget.name}? They will not be able to sign in.` : ""}
+        confirmLabel="Deactivate"
+        destructive
+        busy={statusBusy}
+        onConfirm={() => deactivateTarget && toggleStatus(deactivateTarget)}
+        onClose={() => setDeactivateTarget(null)}
+      />
 
       {credentials && (
         <CredentialsDialog

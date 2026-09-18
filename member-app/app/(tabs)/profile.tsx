@@ -27,6 +27,7 @@ import {
   IdCard,
   Building2,
   UserPlus,
+  Eye,
   Lock,
   Shield,
   LogOut,
@@ -42,14 +43,14 @@ import {
 } from '../../src/services/membersService';
 import { changePassword } from '../../src/services/authService';
 import { inviteGuardian, listMyGuardians, acceptGuardianCode, revokeGuardian, listWards } from '../../src/services/guardiansService';
-import { buildProfilePatch, isValidIsoDate, valuesFromProfile, resolveMemberFields } from '../../src/lib/profileFields';
+import { buildProfilePatch, isValidIsoDate, valuesFromProfile, resolveMemberFields, isGuardianOnlyProfile } from '../../src/lib/profileFields';
 import type { ProfileFieldDef, StudentProfile } from '../../src/types';
 import { colors, radius, spacing, typography } from '../../src/constants/theme';
 import { useAuth } from '../../src/store/AuthContext';
 import { tapFeedback, successFeedback } from '../../src/services/haptics';
 import { confirmAsync } from '../../src/utils/confirm';
 
-type ProfileSheet = 'academic' | 'medical' | 'org' | 'guardian' | 'password' | 'privacy';
+type ProfileSheet = 'academic' | 'medical' | 'org' | 'myGuardians' | 'watching' | 'password' | 'privacy';
 
 type IconType = React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
 
@@ -98,7 +99,8 @@ const SHEET_TITLES: Record<ProfileSheet, string> = {
   academic: 'Role & contact details',
   medical: 'Emergency medical info',
   org: 'Organization',
-  guardian: 'Guardian',
+  myGuardians: 'My guardians',
+  watching: "Who I'm watching",
   password: 'Change password',
   privacy: 'Privacy & data',
 };
@@ -189,7 +191,10 @@ export default function ProfileScreen() {
   const [error, setError] = useState<string | null>(null);
   const [sheet, setSheet] = useState<ProfileSheet | null>(null);
   useFocusEffect(useCallback(() => {
-    if (section === 'guardian' || section === 'org') {
+    if (section === 'guardian') {
+      setSheet('myGuardians');
+      router.setParams({ section: undefined });
+    } else if (section === 'org') {
       setSheet(section);
       router.setParams({ section: undefined });
     }
@@ -489,11 +494,7 @@ export default function ProfileScreen() {
     .slice(0, 2)
     .toUpperCase();
   const orgName = profile?.college?.name ?? profile?.organization?.name;
-  // Explicit signup choice, not just "no organization yet" — see AuthContext's isGuardianOnly
-  // for why inferring this from organizationId alone was wrong.
-  const isGuardianOnly =
-    (profile?.profile?.accountPurpose as string | undefined) === 'guardian' &&
-    !(profile?.organizationId || profile?.college?.id);
+  const isGuardianOnly = !!profile && isGuardianOnlyProfile(profile);
   const canEditSheet = sheet === 'academic' || sheet === 'medical';
   const detailsPreviewField = detailFields.find((f) => f.group === 'role' && detailValues[f.key]) ?? detailFields.find((f) => detailValues[f.key]);
   const detailsPreview = detailsPreviewField ? detailValues[detailsPreviewField.key] : undefined;
@@ -605,11 +606,11 @@ export default function ProfileScreen() {
       );
     }
 
-    if (sheet === 'guardian') {
+    if (sheet === 'myGuardians') {
       return (
         <>
           <Text style={styles.medicalDesc}>
-            Invite someone you trust. They are alerted if you send Emergency SOS.
+            Invite someone you trust to watch over you. They are alerted if you send Emergency SOS.
           </Text>
           <View style={styles.sheetSection}>
             <Pressable
@@ -648,16 +649,24 @@ export default function ProfileScreen() {
               ))}
             </>
           )}
-          <View style={styles.divider} />
+        </>
+      );
+    }
+
+    if (sheet === 'watching') {
+      return (
+        <>
+          <Text style={styles.medicalDesc}>
+            Enter a code someone shared with you to watch over them — you'll be alerted if they send Emergency SOS.
+          </Text>
           <View style={styles.sheetSection}>
-            <GlassInput label="Accept a guardian invite" placeholder="CODE" value={acceptCode} onChangeText={(t) => setAcceptCode(t.toUpperCase())} autoCapitalize="characters" />
-            <Pressable style={[styles.privacyRow, styles.flushRow]} onPress={handleAcceptGuardian}>
-              <Text style={styles.privacyRowText}>Accept guardian code</Text>
+            <GlassInput label="Guardian invite code" placeholder="CODE" value={acceptCode} onChangeText={(t) => setAcceptCode(t.toUpperCase())} autoCapitalize="characters" />
+            <Pressable style={[styles.sheetBtn, !acceptCode.trim() && styles.sheetBtnDisabled]} disabled={!acceptCode.trim()} onPress={handleAcceptGuardian}>
+              <Text style={styles.sheetBtnText}>Accept code</Text>
             </Pressable>
           </View>
           {wards.length > 0 && (
             <>
-              <View style={styles.divider} />
               <Text style={styles.sectionLabel}>People you're watching</Text>
               {wards.map((w) => (
                 <View key={w.id} style={styles.guardianRow}>
@@ -789,9 +798,16 @@ export default function ProfileScreen() {
           <View style={styles.menuDivider} />
           <MenuRow
             icon={UserPlus}
-            label="Guardian"
+            label="My guardians"
             value={guardians.some(g => g.status === 'ACTIVE') ? 'Connected' : guardians.some(g => g.status === 'PENDING') ? 'Invite pending' : 'Set up'}
-            onPress={() => openSheet('guardian')}
+            onPress={() => openSheet('myGuardians')}
+          />
+          <View style={styles.menuDivider} />
+          <MenuRow
+            icon={Eye}
+            label="Who I'm watching"
+            value={wards.length > 0 ? `${wards.length} ${wards.length === 1 ? 'person' : 'people'}` : 'Nobody yet'}
+            onPress={() => openSheet('watching')}
           />
         </Glass>
         <Text style={styles.groupTitle}>Account & privacy</Text>

@@ -131,12 +131,12 @@ export default function EmergencyScreen() {
     setQueuedOffline(false);
     setComplaintId(null);
 
-    const [profile, guardians] = await Promise.all([
+    // Fetch guardian/org context in parallel with the send — display-only,
+    // must never delay the alert itself.
+    const contextPromise = Promise.all([
       getMyProfile().catch(() => null),
       listMyGuardians().catch(() => []),
     ]);
-    const connected = guardians.filter((g) => g.status === 'ACTIVE' || g.guardian).length;
-    applyContext(profile, connected, Math.max(0, guardians.length - connected));
 
     const result = await sendEmergencySos((loc) => {
       setLocationStatus(loc);
@@ -149,6 +149,10 @@ export default function EmergencyScreen() {
       finishAlertRows({ queued: false, failed: true, error: result.error });
       return;
     }
+
+    const [profile, guardians] = await contextPromise;
+    const connected = guardians.filter((g) => g.status === 'ACTIVE' || g.guardian).length;
+    applyContext(profile, connected, Math.max(0, guardians.length - connected));
 
     setQueuedOffline(result.queuedOffline);
     setComplaintId(result.complaintId);
