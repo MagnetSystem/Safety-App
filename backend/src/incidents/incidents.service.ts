@@ -187,18 +187,12 @@ export class IncidentsService {
       where.memberId = { in: links.map((l) => l.memberId) };
       where.type = 'EMERGENCY';
     } else if (user.role === UserRole.STAFF) {
-      const deptIds = (
-        await this.prisma.departmentStaff.findMany({
-          where: { orgStaff: { userId: user.id } },
-          select: { departmentId: true },
-        })
-      ).map((d) => d.departmentId);
+      // Staff only see cases assigned to them, plus every emergency org-wide so someone
+      // can respond before an admin gets to assign it. Department membership alone no
+      // longer grants visibility — that leaked unassigned department cases into the list
+      // even though assertAccess() would then refuse to open them.
       where.organizationId = user.organizationId!;
-      where.OR = [
-        { assignedToUserId: user.id },
-        { type: 'EMERGENCY' },
-        ...(deptIds.length ? [{ departmentId: { in: deptIds } }] : []),
-      ];
+      where.OR = [{ assignedToUserId: user.id }, { type: 'EMERGENCY' }];
     } else if (isOrgOperator(user.role)) {
       where.organizationId = user.organizationId!;
     } else if (user.role === UserRole.SUPPORT) {
@@ -448,7 +442,10 @@ export class IncidentsService {
     if (user.role === UserRole.SUPPORT) return;
 
     if (user.role === UserRole.STAFF) {
-      if (incident.organizationId !== user.organizationId || incident.assignedToUserId !== user.id) {
+      if (incident.organizationId !== user.organizationId) {
+        throw new ForbiddenException('This incident belongs to a different organization');
+      }
+      if (incident.assignedToUserId !== user.id && incident.type !== 'EMERGENCY') {
         throw new ForbiddenException('You do not have access to this incident');
       }
       return;
