@@ -489,9 +489,11 @@ export default function ProfileScreen() {
     .slice(0, 2)
     .toUpperCase();
   const orgName = profile?.college?.name ?? profile?.organization?.name;
-  // No organization: this account exists to be someone's guardian, not to file reports or trigger
-  // their own SOS, so their own emergency/medical profile (which only supports that) doesn't apply.
-  const isGuardianOnly = !(profile?.organizationId || profile?.college?.id);
+  // Explicit signup choice, not just "no organization yet" — see AuthContext's isGuardianOnly
+  // for why inferring this from organizationId alone was wrong.
+  const isGuardianOnly =
+    (profile?.profile?.accountPurpose as string | undefined) === 'guardian' &&
+    !(profile?.organizationId || profile?.college?.id);
   const canEditSheet = sheet === 'academic' || sheet === 'medical';
   const detailsPreviewField = detailFields.find((f) => f.group === 'role' && detailValues[f.key]) ?? detailFields.find((f) => detailValues[f.key]);
   const detailsPreview = detailsPreviewField ? detailValues[detailsPreviewField.key] : undefined;

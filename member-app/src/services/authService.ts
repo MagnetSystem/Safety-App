@@ -22,6 +22,9 @@ export interface RegisterMemberInput {
   department?: string;
   course?: string;
   year?: number;
+  /** Explicit signup choice — determines whether this account gets the full member
+   *  experience (Home/Reports/SOS) or the guardian-only alerts-and-profile experience. */
+  accountPurpose?: 'member' | 'guardian';
 }
 
 export type RegisterStudentInput = RegisterMemberInput;
@@ -33,6 +36,7 @@ export const registerMember = async (input: RegisterMemberInput) => {
     name: input.name,
     joinCode: input.joinCode,
     mobile: input.mobile,
+    accountPurpose: input.accountPurpose,
   });
   return data;
 };

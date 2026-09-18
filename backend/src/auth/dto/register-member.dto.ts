@@ -1,4 +1,4 @@
-import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class RegisterMemberDto {
   @IsEmail()
@@ -20,4 +20,10 @@ export class RegisterMemberDto {
   @IsOptional()
   @IsString()
   mobile?: string;
+
+  /** Explicit signup choice, not inferred from joinCode — a real member may simply not
+   *  have joined an org yet. Drives which UI (full member vs. guardian-only) the client shows. */
+  @IsOptional()
+  @IsIn(['member', 'guardian'])
+  accountPurpose?: 'member' | 'guardian';
 }

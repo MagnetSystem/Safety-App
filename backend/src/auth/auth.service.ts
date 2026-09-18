@@ -63,6 +63,7 @@ export class AuthService {
               name: dto.name,
               organizationId,
               mobile: dto.mobile,
+              ...(dto.accountPurpose ? { profile: { accountPurpose: dto.accountPurpose } } : {}),
             },
           },
         },

@@ -95,7 +95,7 @@ export default function GuardianAcceptScreen() {
           <Pressable style={[styles.button, styles.primaryButton]} onPress={() => router.push('/(auth)/login' as any)}>
             <Text style={styles.primaryButtonText}>Log in</Text>
           </Pressable>
-          <Pressable style={[styles.button, styles.secondaryButton]} onPress={() => router.push('/(auth)/register' as any)}>
+          <Pressable style={[styles.button, styles.secondaryButton]} onPress={() => router.push('/(auth)/register?purpose=guardian' as any)}>
             <Text style={styles.secondaryButtonText}>Create an account</Text>
           </Pressable>
         </Glass>

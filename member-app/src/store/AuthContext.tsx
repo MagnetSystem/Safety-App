@@ -21,6 +21,9 @@ interface AuthContextValue {
   isLoading: boolean;
   isAuthenticated: boolean;
   profileIncomplete: boolean;
+  /** True only when the account explicitly signed up as a Guardian (not merely "has no
+   *  organization yet" — a real member without an org would be wrongly treated as guardian-only). */
+  isGuardianOnly: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<boolean>;
   register: (input: RegisterStudentInput) => Promise<boolean>;
@@ -38,23 +41,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [profileIncomplete, setProfileIncomplete] = useState(true);
+  const [isGuardianOnly, setIsGuardianOnly] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const segments = useSegments();
 
   // Fails safe: if the profile can't be checked (network hiccup, cold token),
   // treat it as incomplete rather than silently letting the member skip it.
-  const checkProfileStatus = useCallback(async (): Promise<boolean> => {
+  const checkProfileStatus = useCallback(async (): Promise<{ incomplete: boolean; guardianOnly: boolean }> => {
     try {
       const profile = await getMyProfile();
-      return !isProfileComplete(profile);
+      const accountPurpose = profile.profile?.accountPurpose as string | undefined;
+      const hasOrg = !!(profile.organizationId || profile.college?.id);
+      return { incomplete: !isProfileComplete(profile), guardianOnly: accountPurpose === 'guardian' && !hasOrg };
     } catch {
-      return true;
+      return { incomplete: true, guardianOnly: false };
     }
   }, []);
 
   const refreshProfileStatus = useCallback(async () => {
-    setProfileIncomplete(await checkProfileStatus());
+    const { incomplete, guardianOnly } = await checkProfileStatus();
+    setProfileIncomplete(incomplete);
+    setIsGuardianOnly(guardianOnly);
   }, [checkProfileStatus]);
 
   // When the axios layer detects a dead session (refresh failed / account
@@ -113,7 +121,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           organizationId,
           collegeId: organizationId,
         });
-        setProfileIncomplete(await checkProfileStatus());
+        const { incomplete, guardianOnly } = await checkProfileStatus();
+        setProfileIncomplete(incomplete);
+        setIsGuardianOnly(guardianOnly);
       } catch {
         await deleteItem('accessToken');
         await deleteItem('refreshToken');
@@ -134,8 +144,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const data = await loginRequest(email, password);
       await persistSession(data);
-      const incomplete = await checkProfileStatus();
+      const { incomplete, guardianOnly } = await checkProfileStatus();
       setProfileIncomplete(incomplete);
+      setIsGuardianOnly(guardianOnly);
       return incomplete;
     } catch (err) {
       const message = extractErrorMessage(err, 'Could not sign in. Check your email and password.');
@@ -149,8 +160,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const data = await registerRequest(input);
       await persistSession(data);
-      const incomplete = await checkProfileStatus();
+      const { incomplete, guardianOnly } = await checkProfileStatus();
       setProfileIncomplete(incomplete);
+      setIsGuardianOnly(guardianOnly);
       return incomplete;
     } catch (err) {
       const message = extractErrorMessage(err, 'Could not create your account.');
@@ -165,11 +177,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await deleteItem('refreshToken');
     setUser(null);
     setProfileIncomplete(true);
+    setIsGuardianOnly(false);
   }, []);
 
   return (
     <AuthContext.Provider
-      value={{ user, isLoading, isAuthenticated: !!user, profileIncomplete, error, login, register, logout, refreshProfileStatus }}
+      value={{ user, isLoading, isAuthenticated: !!user, profileIncomplete, isGuardianOnly, error, login, register, logout, refreshProfileStatus }}
     >
       {children}
     </AuthContext.Provider>

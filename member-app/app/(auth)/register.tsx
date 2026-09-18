@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { GlassInput, ScreenHeader } from '../../src/components/ui-kit';
 import { Screen } from '../../src/components/PhoneFrame';
 import { colors, spacing, typography, shadows } from '../../src/constants/theme';
@@ -11,12 +11,18 @@ import { ChevronRight, ChevronLeft, Check } from 'lucide-react-native';
 export default function RegisterScreen() {
   const router = useRouter();
   const { register } = useAuth();
+  const params = useLocalSearchParams<{ purpose?: string }>();
 
   const [step, setStep] = useState(1);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [joinCode, setJoinCode] = useState('');
+  // Explicit choice — inferring "guardian" from "no organization yet" was wrong, since a real
+  // member who just hasn't joined an org yet would get incorrectly treated as guardian-only.
+  // Arriving here from a guardian-invite deep link (?purpose=guardian) is itself an explicit
+  // signal, so it pre-selects Guardian instead of defaulting to Member and hoping they notice.
+  const [purpose, setPurpose] = useState<'member' | 'guardian'>(params.purpose === 'guardian' ? 'guardian' : 'member');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -32,7 +38,8 @@ export default function RegisterScreen() {
         name: name.trim(),
         email: email.trim(),
         password,
-        joinCode: joinCode.trim() || undefined,
+        joinCode: purpose === 'member' ? joinCode.trim() || undefined : undefined,
+        accountPurpose: purpose,
       });
       const pendingGuardianCode = await getPendingGuardianCode();
       if (pendingGuardianCode) {
@@ -52,7 +59,7 @@ export default function RegisterScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <ScreenHeader
           title="Create account"
-          subtitle={step === 1 ? 'Step 1: Your details' : 'Step 2: Organization (optional)'}
+          subtitle={step === 1 ? 'Step 1: Your details' : 'Step 2: Member or Guardian'}
           back={step === 1 ? '/(auth)/login' : undefined}
           onBack={step === 2 ? () => setStep(1) : undefined}
         />
@@ -94,16 +101,46 @@ export default function RegisterScreen() {
 
           {step === 2 && (
             <>
-              <GlassInput
-                label="Organization join code (optional)"
-                placeholder="e.g. DEMOJOIN"
-                value={joinCode}
-                onChangeText={(t) => setJoinCode(t.toUpperCase())}
-                autoCapitalize="characters"
-              />
-              <Text style={styles.noticeText}>
-                Ask your owner or admin for the join code. Skip this if you're only here to be someone's Guardian — you can join an organization later from Profile.
-              </Text>
+              <Text style={styles.label}>Are you joining as a Member or a Guardian?</Text>
+              <View style={styles.purposeRow}>
+                <Pressable
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: purpose === 'member' }}
+                  onPress={() => setPurpose('member')}
+                  style={[styles.purposeCard, purpose === 'member' && styles.purposeCardActive]}
+                >
+                  <Text style={[styles.purposeTitle, purpose === 'member' && styles.purposeTitleActive]}>Member</Text>
+                  <Text style={styles.purposeDesc}>You'll report incidents and can trigger Emergency SOS.</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: purpose === 'guardian' }}
+                  onPress={() => setPurpose('guardian')}
+                  style={[styles.purposeCard, purpose === 'guardian' && styles.purposeCardActive]}
+                >
+                  <Text style={[styles.purposeTitle, purpose === 'guardian' && styles.purposeTitleActive]}>Guardian</Text>
+                  <Text style={styles.purposeDesc}>You'll watch over someone else's emergency alerts only.</Text>
+                </Pressable>
+              </View>
+
+              {purpose === 'member' ? (
+                <>
+                  <GlassInput
+                    label="Organization join code (optional)"
+                    placeholder="e.g. DEMOJOIN"
+                    value={joinCode}
+                    onChangeText={(t) => setJoinCode(t.toUpperCase())}
+                    autoCapitalize="characters"
+                  />
+                  <Text style={styles.noticeText}>
+                    Ask your owner or admin for the join code. You can also join later from Profile.
+                  </Text>
+                </>
+              ) : (
+                <Text style={styles.noticeText}>
+                  You'll accept a guardian invite code right after this (or anytime later from Profile → Guardian).
+                </Text>
+              )}
 
               {error && <Text style={styles.error}>{error}</Text>}
 
@@ -143,6 +180,43 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: spacing.xxl,
+  },
+  label: {
+    ...typography.body,
+    fontSize: 15,
+    color: colors.ink,
+  },
+  purposeRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  purposeCard: {
+    flex: 1,
+    borderRadius: 16,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    gap: 4,
+  },
+  purposeCardActive: {
+    borderColor: colors.indigoink,
+    backgroundColor: 'rgba(91,110,232,0.08)',
+  },
+  purposeTitle: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 15,
+    color: colors.ink,
+  },
+  purposeTitleActive: {
+    color: colors.indigoink,
+  },
+  purposeDesc: {
+    ...typography.caption,
+    color: colors.subink,
+    lineHeight: 16,
   },
   progressContainer: {
     flexDirection: 'row',

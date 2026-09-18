@@ -3,10 +3,9 @@ import { TabBar } from '../../src/components/TabBar';
 import { useAuth } from '../../src/store/AuthContext';
 
 export default function TabsLayout() {
-  const { user } = useAuth();
-  // No organization means nothing to report and no reason to arm your own SOS from here —
-  // this account exists purely to watch over someone else, so Home/My reports don't apply.
-  const isGuardianOnly = !!user && !user.organizationId;
+  // Explicit signup choice, not "no organization yet" — a real member who hasn't joined an
+  // org shouldn't lose Home/My reports/SOS just because that field is empty.
+  const { isGuardianOnly } = useAuth();
 
   return (
     <Tabs
