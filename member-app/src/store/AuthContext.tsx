@@ -72,9 +72,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isLoading) return;
     const inAuthGroup = segments[0] === '(auth)';
-    if (!user && !inAuthGroup) {
+    // The guardian accept screen has to work with no session at all (a deep link can be the
+    // very first thing someone opens) and handles its own routing once it's done, so it's
+    // exempt from both guards here.
+    const inGuardianAccept = segments[0] === 'guardian';
+    if (!user && !inAuthGroup && !inGuardianAccept) {
       router.replace('/(auth)/login');
-    } else if (user && profileIncomplete && !inAuthGroup) {
+    } else if (user && profileIncomplete && !inAuthGroup && !inGuardianAccept) {
       router.replace('/(auth)/complete-profile');
     }
   }, [user, profileIncomplete, segments, isLoading]);

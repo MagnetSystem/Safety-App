@@ -16,6 +16,7 @@ import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as Clipboard from 'expo-clipboard';
+import * as Linking from 'expo-linking';
 import {
   HeartPulse,
   Edit2,
@@ -40,7 +41,7 @@ import {
   getMyProfile, updateMyProfile, exportMyData, deleteMyAccount, joinOrganization,
 } from '../../src/services/membersService';
 import { changePassword } from '../../src/services/authService';
-import { inviteGuardian, listMyGuardians, acceptGuardianCode, revokeGuardian } from '../../src/services/guardiansService';
+import { inviteGuardian, listMyGuardians, acceptGuardianCode, revokeGuardian, listWards } from '../../src/services/guardiansService';
 import { buildProfilePatch, isValidIsoDate, valuesFromProfile, resolveMemberFields } from '../../src/lib/profileFields';
 import type { ProfileFieldDef, StudentProfile } from '../../src/types';
 import { colors, radius, spacing, typography } from '../../src/constants/theme';
@@ -123,7 +124,8 @@ function InviteCodeCard({ generating, code }: { generating: boolean; code: strin
 
   const handleShare = async () => {
     if (!code || generating) return;
-    const message = `Your Safety app guardian invite code is ${code}. Open the app → Profile → Guardian, then enter this code.`;
+    const link = Linking.createURL('guardian/accept', { queryParams: { code } });
+    const message = `You've been invited as a Safety app guardian. Tap to accept: ${link}\n\nOr open the app → Profile → Guardian and enter code ${code}.`;
     try {
       await Share.share({ message, title: 'Guardian invite code' });
     } catch {
@@ -217,6 +219,7 @@ export default function ProfileScreen() {
 
   const [guardians, setGuardians] = useState<{ id: string; status: string; guardian: { email: string } | null }[]>([]);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [wards, setWards] = useState<{ id: string; member: { id: string; name: string } }[]>([]);
 
   const applyProfile = useCallback((p: StudentProfile) => {
     setProfile(p);
@@ -243,6 +246,7 @@ export default function ProfileScreen() {
         applyProfile(p);
         setError(null);
         listMyGuardians().then(setGuardians).catch(() => undefined);
+        listWards().then(setWards).catch(() => undefined);
       })
       .catch(() => setError('Could not load your profile.'))
       .finally(() => setLoading(false));
@@ -657,6 +661,29 @@ export default function ProfileScreen() {
               <Text style={styles.privacyRowText}>Accept guardian code</Text>
             </Pressable>
           </View>
+          {wards.length > 0 && (
+            <>
+              <View style={styles.divider} />
+              <Text style={styles.sectionLabel}>People you're watching</Text>
+              {wards.map((w) => (
+                <View key={w.id} style={styles.guardianRow}>
+                  <Text style={styles.rowValue}>{w.member.name}</Text>
+                </View>
+              ))}
+              <View style={styles.sheetSection}>
+                <Pressable
+                  style={[styles.privacyRow, styles.flushRow]}
+                  onPress={() => {
+                    setSheet(null);
+                    router.push('/(tabs)/wards' as any);
+                  }}
+                >
+                  <Text style={styles.privacyRowText}>View their emergency alerts</Text>
+                  <ChevronRight size={16} color={colors.mutedink} />
+                </Pressable>
+              </View>
+            </>
+          )}
         </>
       );
     }

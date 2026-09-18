@@ -36,6 +36,12 @@ export class GuardiansController {
     return this.guardiansService.listWards(user.id);
   }
 
+  @Get('wards/alerts')
+  @Roles(UserRole.GUARDIAN, UserRole.MEMBER)
+  listWardAlerts(@CurrentUser() user: AuthenticatedUser) {
+    return this.guardiansService.listWardAlerts(user.id);
+  }
+
   @Post('accept')
   @Audit({ action: 'GUARDIAN_ACCEPTED', entityType: 'GuardianLink' })
   accept(@CurrentUser() user: AuthenticatedUser, @Body() dto: AcceptGuardianDto) {

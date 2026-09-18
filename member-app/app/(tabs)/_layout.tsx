@@ -22,6 +22,12 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="wards"
+        options={{
+          title: 'Guardian',
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',

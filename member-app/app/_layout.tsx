@@ -67,6 +67,7 @@ export default function RootLayout() {
             <Stack.Screen name="report/emergency" options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
             <Stack.Screen name="report/new" />
             <Stack.Screen name="reports/[id]" />
+            <Stack.Screen name="guardian/accept" />
             <Stack.Screen name="notifications" />
             <Stack.Screen name="help" />
           </Stack>

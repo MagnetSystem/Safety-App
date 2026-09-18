@@ -21,6 +21,25 @@ export const listWards = async () => {
   return data;
 };
 
+export interface WardAlert {
+  id: string;
+  code: string;
+  status: string;
+  createdAt: string;
+  gpsLat: number | null;
+  gpsLng: number | null;
+  gpsAccuracy: number | null;
+  memberId: string;
+  member: { id: string; name: string } | null;
+}
+
+export const listWardAlerts = async () => {
+  const { data } = await api.get<{ wards: { id: string; name: string }[]; alerts: WardAlert[] }>(
+    '/guardians/wards/alerts',
+  );
+  return data;
+};
+
 export const acceptGuardianCode = async (code: string) => {
   const { data } = await api.post('/guardians/accept', { code });
   return data;

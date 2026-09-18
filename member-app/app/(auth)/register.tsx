@@ -5,6 +5,7 @@ import { GlassInput, ScreenHeader } from '../../src/components/ui-kit';
 import { Screen } from '../../src/components/PhoneFrame';
 import { colors, spacing, typography, shadows } from '../../src/constants/theme';
 import { useAuth } from '../../src/store/AuthContext';
+import { getPendingGuardianCode } from '../../src/services/pendingGuardianCode';
 import { ChevronRight, ChevronLeft, Check } from 'lucide-react-native';
 
 export default function RegisterScreen() {
@@ -33,6 +34,11 @@ export default function RegisterScreen() {
         password,
         joinCode: joinCode.trim() || undefined,
       });
+      const pendingGuardianCode = await getPendingGuardianCode();
+      if (pendingGuardianCode) {
+        router.replace(`/guardian/accept?code=${encodeURIComponent(pendingGuardianCode)}` as any);
+        return;
+      }
       router.replace('/(auth)/complete-profile' as any);
     } catch (err: any) {
       setError(err.message ?? 'Could not create your account.');

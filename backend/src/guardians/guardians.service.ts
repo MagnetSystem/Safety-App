@@ -59,6 +59,39 @@ export class GuardiansService {
     });
   }
 
+  /**
+   * Emergency-only, ward-scoped alert feed. A guardian's `role` stays MEMBER when they were
+   * already a member before accepting an invite (see `accept()` below), so this can't be gated
+   * on role the way incidents.service.ts's findAll() does — it has to key off the GuardianLink
+   * itself, which is what actually makes someone a guardian in practice.
+   */
+  async listWardAlerts(guardianUserId: string) {
+    const links = await this.prisma.guardianLink.findMany({
+      where: { guardianUserId, status: 'ACTIVE' },
+      select: { member: { select: { id: true, name: true } } },
+    });
+    const wards = links.map((l) => l.member).filter((m): m is { id: string; name: string } => !!m);
+    if (wards.length === 0) return { wards: [], alerts: [] };
+
+    const alerts = await this.prisma.incident.findMany({
+      where: { memberId: { in: wards.map((w) => w.id) }, type: 'EMERGENCY' },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        code: true,
+        status: true,
+        createdAt: true,
+        gpsLat: true,
+        gpsLng: true,
+        gpsAccuracy: true,
+        memberId: true,
+        member: { select: { id: true, name: true } },
+      },
+    });
+
+    return { wards, alerts };
+  }
+
   async accept(userId: string, code: string) {
     const hashed = hashToken(code.trim().toUpperCase());
     const link = await this.prisma.guardianLink.findUnique({ where: { inviteCodeHash: hashed } });

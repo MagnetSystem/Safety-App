@@ -6,6 +6,7 @@ import { Glass, GlassInput } from '../../src/components/ui-kit';
 import { Screen } from '../../src/components/PhoneFrame';
 import { colors, spacing, typography, shadows } from '../../src/constants/theme';
 import { useAuth } from '../../src/store/AuthContext';
+import { getPendingGuardianCode } from '../../src/services/pendingGuardianCode';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -23,6 +24,11 @@ export default function LoginScreen() {
     setSubmitting(true);
     try {
       const incomplete = await login(email.trim(), password);
+      const pendingGuardianCode = await getPendingGuardianCode();
+      if (pendingGuardianCode) {
+        router.replace(`/guardian/accept?code=${encodeURIComponent(pendingGuardianCode)}` as any);
+        return;
+      }
       router.replace(incomplete ? ('/(auth)/complete-profile' as any) : '/(tabs)/home');
     } catch (err: any) {
       setError(err.message ?? 'Could not sign in.');

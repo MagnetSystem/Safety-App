@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Home, List, User } from 'lucide-react-native';
+import { Home, List, User, HeartHandshake } from 'lucide-react-native';
 import { Frost } from './GlassSurface';
 import { radius, spacing, typography, shadows } from '../constants/theme';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
@@ -9,12 +9,14 @@ import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 const icons = {
   home: Home,
   reports: List,
+  wards: HeartHandshake,
   profile: User,
 };
 
 const labels = {
   home: 'Home',
   reports: 'My reports',
+  wards: 'Guardian',
   profile: 'Profile',
 };
 
