@@ -39,7 +39,7 @@ export default function RegisterScreen() {
         router.replace(`/guardian/accept?code=${encodeURIComponent(pendingGuardianCode)}` as any);
         return;
       }
-      router.replace('/(auth)/complete-profile' as any);
+      router.replace('/(auth)/complete-profile' as any); // complete-profile itself routes onward via '/' once done
     } catch (err: any) {
       setError(err.message ?? 'Could not create your account.');
     } finally {
@@ -102,7 +102,7 @@ export default function RegisterScreen() {
                 autoCapitalize="characters"
               />
               <Text style={styles.noticeText}>
-                Ask your owner or admin for the join code. Skip this if you only need Emergency SOS and a Guardian — you can join later from Profile.
+                Ask your owner or admin for the join code. Skip this if you're only here to be someone's Guardian — you can join an organization later from Profile.
               </Text>
 
               {error && <Text style={styles.error}>{error}</Text>}

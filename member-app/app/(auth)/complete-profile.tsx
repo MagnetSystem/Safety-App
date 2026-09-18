@@ -59,7 +59,8 @@ export default function CompleteProfileScreen() {
       const { columnPatch, profile } = buildProfilePatch(fields, values);
       await updateMyProfile({ ...columnPatch, profile } as any);
       await refreshProfileStatus();
-      router.replace('/(tabs)/home');
+      // Let index.tsx pick Home vs. the guardian-only Alerts tab based on organization status.
+      router.replace('/');
     } catch (err: any) {
       const raw = err.response?.data?.message;
       setError((Array.isArray(raw) ? raw.join('\n') : raw) || err.message || 'Could not save your profile details.');

@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Animated, Easing, AccessibilityInfo, Alert } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Animated, Easing, AccessibilityInfo } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from 'expo-router';
 import Svg, { Circle } from 'react-native-svg';
 import { colors, gradients, typography } from '../constants/theme';
 import { heavyFeedback, lightFeedback, tapFeedback } from '../services/haptics';
+import { confirmAsync } from '../utils/confirm';
 
 const HOLD_MS = 2000;
 const SIZE = 176;
@@ -174,7 +175,15 @@ export function SOSButton({ onArmed, dark = false }: { onArmed: () => void; dark
           accessibilityRole="button"
           accessibilityLabel="Emergency SOS"
           accessibilityHint="Hold for two seconds to send an alert. Screen reader users can activate to confirm."
-          onAccessibilityTap={() => Alert.alert('Send emergency SOS?', 'This alerts your configured recipients.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Send SOS', onPress: arm }])}
+          onAccessibilityTap={async () => {
+            const confirmed = await confirmAsync({
+              title: 'Send emergency SOS?',
+              message: 'This alerts your configured recipients.',
+              confirmLabel: 'Send SOS',
+              destructive: true,
+            });
+            if (confirmed) arm();
+          }}
           onPressIn={onPressIn}
           onPressOut={onPressOut}
           onPress={onPressOut}

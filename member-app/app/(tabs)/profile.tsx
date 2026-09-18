@@ -47,6 +47,7 @@ import type { ProfileFieldDef, StudentProfile } from '../../src/types';
 import { colors, radius, spacing, typography } from '../../src/constants/theme';
 import { useAuth } from '../../src/store/AuthContext';
 import { tapFeedback, successFeedback } from '../../src/services/haptics';
+import { confirmAsync } from '../../src/utils/confirm';
 
 type ProfileSheet = 'academic' | 'medical' | 'org' | 'guardian' | 'password' | 'privacy';
 
@@ -334,29 +335,23 @@ export default function ProfileScreen() {
     }
   };
 
-  const handleDeleteAccount = () => {
-    Alert.alert(
-      'Delete your account?',
-      'Your profile and personal details are permanently removed. Reports you filed are kept for the committee but no longer linked to you. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setBusy('delete');
-            try {
-              await deleteMyAccount();
-              await logout();
-              router.replace('/(auth)/login');
-            } catch {
-              setBusy(null);
-              Alert.alert('Could not delete', 'Please try again in a moment.');
-            }
-          },
-        },
-      ],
-    );
+  const handleDeleteAccount = async () => {
+    const confirmed = await confirmAsync({
+      title: 'Delete your account?',
+      message: 'Your profile and personal details are permanently removed. Reports you filed are kept for the committee but no longer linked to you. This cannot be undone.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!confirmed) return;
+    setBusy('delete');
+    try {
+      await deleteMyAccount();
+      await logout();
+      router.replace('/(auth)/login');
+    } catch {
+      setBusy(null);
+      Alert.alert('Could not delete', 'Please try again in a moment.');
+    }
   };
 
   const fieldsValid = (fields: ProfileFieldDef[], values: Record<string, string>) =>
@@ -441,35 +436,29 @@ export default function ProfileScreen() {
     }
   };
 
-  const handleRevokeGuardian = (id: string, isPending: boolean) => {
-    Alert.alert(
-      isPending ? 'Cancel this invite?' : 'Remove this guardian?',
-      isPending
+  const handleRevokeGuardian = async (id: string, isPending: boolean) => {
+    const confirmed = await confirmAsync({
+      title: isPending ? 'Cancel this invite?' : 'Remove this guardian?',
+      message: isPending
         ? 'The invite code will stop working.'
         : 'They will no longer be alerted if you trigger Emergency SOS.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: isPending ? 'Cancel invite' : 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            setRevokingId(id);
-            try {
-              await revokeGuardian(id);
-              if (id === guardianCodeLinkId) {
-                setGuardianCode(null);
-                setGuardianCodeLinkId(null);
-              }
-              await listMyGuardians().then(setGuardians);
-            } catch {
-              Alert.alert('Could not remove', 'Please try again in a moment.');
-            } finally {
-              setRevokingId(null);
-            }
-          },
-        },
-      ],
-    );
+      confirmLabel: isPending ? 'Cancel invite' : 'Remove',
+      destructive: true,
+    });
+    if (!confirmed) return;
+    setRevokingId(id);
+    try {
+      await revokeGuardian(id);
+      if (id === guardianCodeLinkId) {
+        setGuardianCode(null);
+        setGuardianCodeLinkId(null);
+      }
+      await listMyGuardians().then(setGuardians);
+    } catch {
+      Alert.alert('Could not remove', 'Please try again in a moment.');
+    } finally {
+      setRevokingId(null);
+    }
   };
 
   const handleAcceptGuardian = async () => {
@@ -500,6 +489,9 @@ export default function ProfileScreen() {
     .slice(0, 2)
     .toUpperCase();
   const orgName = profile?.college?.name ?? profile?.organization?.name;
+  // No organization: this account exists to be someone's guardian, not to file reports or trigger
+  // their own SOS, so their own emergency/medical profile (which only supports that) doesn't apply.
+  const isGuardianOnly = !(profile?.organizationId || profile?.college?.id);
   const canEditSheet = sheet === 'academic' || sheet === 'medical';
   const detailsPreviewField = detailFields.find((f) => f.group === 'role' && detailValues[f.key]) ?? detailFields.find((f) => detailValues[f.key]);
   const detailsPreview = detailsPreviewField ? detailValues[detailsPreviewField.key] : undefined;
@@ -775,13 +767,17 @@ export default function ProfileScreen() {
         </Glass>
         <Text style={styles.groupTitle}>Safety setup</Text>
         <Glass style={styles.menuCard}>
-          <MenuRow
-            icon={HeartPulse}
-            label="Emergency medical info"
-            value={profile?.bloodGroup ?? undefined}
-            onPress={() => openSheet('medical')}
-          />
-          <View style={styles.menuDivider} />
+          {!isGuardianOnly && (
+            <>
+              <MenuRow
+                icon={HeartPulse}
+                label="Emergency medical info"
+                value={profile?.bloodGroup ?? undefined}
+                onPress={() => openSheet('medical')}
+              />
+              <View style={styles.menuDivider} />
+            </>
+          )}
           <MenuRow
             icon={Building2}
             label="Organization"

@@ -23,13 +23,16 @@ export default function LoginScreen() {
     setError(null);
     setSubmitting(true);
     try {
-      const incomplete = await login(email.trim(), password);
+      await login(email.trim(), password);
       const pendingGuardianCode = await getPendingGuardianCode();
       if (pendingGuardianCode) {
         router.replace(`/guardian/accept?code=${encodeURIComponent(pendingGuardianCode)}` as any);
         return;
       }
-      router.replace(incomplete ? ('/(auth)/complete-profile' as any) : '/(tabs)/home');
+      // Let index.tsx decide the destination — it knows about profile completeness and
+      // whether this is a guardian-only (no-organization) account, which this component's
+      // stale `incomplete` return value doesn't reflect fast enough after login() resolves.
+      router.replace('/');
     } catch (err: any) {
       setError(err.message ?? 'Could not sign in.');
     } finally {
