@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { ArrowUpRight, Bell, Building2, FileWarning, LayoutGrid, Layers, LogOut, PanelLeftClose, PanelLeftOpen, ScrollText, Search, Settings, ShieldCheck, UserCog, Users } from "lucide-react";
+import { ArrowUpRight, Bell, Building2, FileWarning, LayoutGrid, Layers, LogOut, PanelLeftClose, PanelLeftOpen, ScrollText, Settings, ShieldCheck, UserCog, Users } from "lucide-react";
 import { useAuth } from "../../context/auth";
 import { canManageOrgTeam } from "../../types/user";
 import { useUnreadNotificationCount } from "../../hooks/useUnreadNotificationCount";
@@ -25,7 +25,6 @@ export default function Sidebar({ support = false, onNavigate, collapsed = false
       { to: "/departments", label: "Departments", icon: Building2 },
     ] : [] },
     { label: "Tools", items: [
-      { to: base + "/search", label: "Search", icon: Search },
       { to: base + "/settings", label: "Settings", icon: Settings },
     ] },
   ];

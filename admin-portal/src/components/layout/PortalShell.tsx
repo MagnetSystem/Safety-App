@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { Bell, ChevronRight, Menu, Search, X } from "lucide-react";
+import { Bell, ChevronRight, Menu, X } from "lucide-react";
 import Sidebar from "./Sidebar";
 import SuperAdminSidebar from "./SuperAdminSidebar";
 import { useAuth } from "../../context/auth";
 import { useUnreadNotificationCount } from "../../hooks/useUnreadNotificationCount";
 
-const titles: Record<string, string> = { reports: "Cases", members: "Members", team: "Admins & staff", departments: "Departments", search: "Search", notifications: "Notifications", settings: "Settings", organizations: "Organizations", "organization-types": "Organization types", "audit-logs": "Audit logs" };
+const titles: Record<string, string> = { reports: "Cases", members: "Members", team: "Admins & staff", departments: "Departments", notifications: "Notifications", settings: "Settings", organizations: "Organizations", "organization-types": "Organization types", "audit-logs": "Audit logs" };
 
 export default function PortalShell({ support = false }: { support?: boolean }) {
   const { user } = useAuth();
@@ -51,7 +51,6 @@ export default function PortalShell({ support = false }: { support?: boolean }) 
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2 sm:gap-4">
-          <Link to={base + "/search"} aria-label="Search workspace" className="flex min-h-10 items-center gap-2 rounded-lg px-2 text-slate-500 hover:bg-white sm:border sm:border-border sm:bg-white sm:px-3"><Search size={17} /><span className="hidden pr-8 text-xs md:block">Search workspace</span></Link>
           <Link to={base + "/notifications"} aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"} className="icon-button relative"><Bell size={19} />{unread > 0 && <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-destructive" />}</Link>
           <Link to={base + "/settings"} aria-label="Your account" className="flex h-9 w-9 items-center justify-center rounded-full border border-[#d4dfce] bg-[#e7eedf] text-xs font-semibold text-[#284a38]">{user?.name?.split(" ").filter(Boolean).map(word => word[0]).slice(0,2).join("") || "SP"}</Link>
         </div>

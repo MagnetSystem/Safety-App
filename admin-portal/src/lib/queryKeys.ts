@@ -54,6 +54,4 @@ export const queryKeys = {
     all: ["audit-logs"] as const,
     list: (page: number, collegeId?: string) => ["audit-logs", "list", page, collegeId ?? ""] as const,
   },
-
-  search: (q: string) => ["search", q] as const,
 };

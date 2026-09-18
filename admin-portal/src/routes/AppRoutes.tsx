@@ -11,7 +11,6 @@ const Dashboard = lazy(() => import('../pages/dashboard/Dashboard'));
 const ReportsList = lazy(() => import('../pages/reports/ReportsList'));
 const ReportDetail = lazy(() => import('../pages/reports/ReportDetail'));
 const Members = lazy(() => import('../pages/members/Members'));
-const Search = lazy(() => import('../pages/search/Search'));
 const Notifications = lazy(() => import('../pages/notifications/Notifications'));
 const Login = lazy(() => import('../pages/auth/Login'));
 const ForgotPassword = lazy(() => import('../pages/auth/ForgotPassword'));
@@ -102,7 +101,6 @@ const AppRoutes = () => {
         <Route path="team/:id" element={<ManageRoute><StaffDetail /></ManageRoute>} />
         <Route path="staff" element={<Navigate to="/team" replace />} />
         <Route path="departments" element={<ManageRoute><Departments /></ManageRoute>} />
-        <Route path="search" element={<Search />} />
         <Route path="notifications" element={<Notifications />} />
         <Route path="settings" element={<Settings />} />
       </Route>
@@ -125,7 +123,6 @@ const AppRoutes = () => {
         <Route path="students" element={<Navigate to="/super-admin/organizations" replace />} />
         <Route path="reports" element={<ReportsList />} />
         <Route path="reports/:id" element={<ReportDetail />} />
-        <Route path="search" element={<Search />} />
         <Route path="audit-logs" element={<AuditLogs />} />
         <Route path="notifications" element={<Notifications />} />
         <Route path="settings" element={<SupportSettings />} />

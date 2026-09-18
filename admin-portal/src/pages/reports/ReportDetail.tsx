@@ -346,11 +346,11 @@ export default function ReportDetail() {
             )}
           </div>
 
-          {/* Conversation with student */}
+          {/* Conversation with reporter */}
           <div className="surface-card p-5">
             <h3 className="font-medium mb-1 flex items-center gap-2">
               <MessageSquare size={18} className="text-primary" />
-              Conversation with {report.type === "ANONYMOUS" ? "reporter" : "student"}
+              Conversation with reporter
             </h3>
             <p className="text-xs text-muted-foreground mb-4">
               These messages are visible to the person who filed the report. Use this to ask for
@@ -373,7 +373,7 @@ export default function ReportDetail() {
                       }`}
                     >
                       <p className="text-[11px] font-medium text-muted-foreground mb-0.5">
-                        {fromStudent ? "Student" : "Committee"}
+                        {fromStudent ? "Reporter" : "Committee"}
                       </p>
                       <p className="text-foreground whitespace-pre-wrap leading-relaxed">{m.body}</p>
                       <p className="text-[10px] text-muted-foreground mt-1">
@@ -393,7 +393,7 @@ export default function ReportDetail() {
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   rows={2}
-                  placeholder="Message the student…"
+                  placeholder="Message the reporter…"
                   className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
                 />
                 <button
